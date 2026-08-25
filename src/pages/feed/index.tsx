@@ -1,6 +1,14 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, ListRenderItem, Pressable, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  ListRenderItem,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useFriends } from '@/src/contexts/friends';
@@ -11,7 +19,7 @@ import { FeedPostCard } from '@/src/pages/feed/post-card';
 
 import { HomeHeader } from '@/components/home/home-header';
 import { PencilIcon } from '@/components/icons/pencil-icon';
-import { background, primary } from '@/constants/theme';
+import { background, darkGray, gray, primary, FontFamily } from '@/constants/theme';
 
 const TAB_BAR_VISUAL_HEIGHT = 80;
 const FAB_SIZE = 52;
@@ -21,16 +29,22 @@ const FAB_GAP_ABOVE_TAB = -80;
 export default function FeedPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { feedUserIds, isLoading } = useFriends();
+  const { feedUserIds, isLoading, reload: reloadFriends } = useFriends();
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   // 탭 화면은 한 번 뜨면 계속 마운트된 상태로 남는다. 글을 쓰고 돌아왔을 때 방금
   // 올린 글이 보이도록, 화면에 다시 포커스될 때마다 목록을 새로 받아온다.
   const [refreshKey, setRefreshKey] = useState(0);
+  // 첫 조회가 끝나기 전에는 안내 문구 대신 스피너를 둔다. 안 그러면 불러오는
+  // 사이에 "피드가 없습니다" 가 한 번 스쳐 지나간다.
+  const [hasLoadedPosts, setHasLoadedPosts] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
+      // 친구 목록도 같이 갱신한다. 친구를 새로 받고 피드 탭으로 오면 그 친구 글까지
+      // 바로 보여야 한다.
+      void reloadFriends();
       setRefreshKey((key) => key + 1);
-    }, []),
+    }, [reloadFriends]),
   );
 
   useEffect(() => {
@@ -42,6 +56,7 @@ export default function FeedPage() {
 
     if (feedUserIds.length === 0) {
       setFeedPosts([]);
+      setHasLoadedPosts(true);
       return;
     }
 
@@ -51,12 +66,14 @@ export default function FeedPage() {
       .then((posts) => {
         if (isMounted) {
           setFeedPosts(posts);
+          setHasLoadedPosts(true);
         }
       })
       .catch((error) => {
         console.warn('[feed] Failed to load posts', error);
         if (isMounted) {
           setFeedPosts([]);
+          setHasLoadedPosts(true);
         }
       });
 
@@ -95,6 +112,23 @@ export default function FeedPage() {
 
   const renderItem: ListRenderItem<FeedPost> = ({ item }) => <FeedPostCard post={item} />;
 
+  const isEmpty = feedPosts.length === 0;
+
+  // 갓 가입해서 친구가 없으면 피드에 아무것도 없다. 빈 화면 대신 다음에 뭘 하면
+  // 되는지 알려 준다.
+  const renderEmpty = () => (
+    <View style={styles.emptyBox}>
+      {isLoading || !hasLoadedPosts ? (
+        <ActivityIndicator color={gray} />
+      ) : (
+        <>
+          <Text style={styles.emptyTitle}>피드가 없습니다.</Text>
+          <Text style={styles.emptyText}>친구 탭에서 친구를 추가해 보세요.</Text>
+        </>
+      )}
+    </View>
+  );
+
   const fabBottom = TAB_BAR_VISUAL_HEIGHT + insets.bottom + FAB_GAP_ABOVE_TAB;
   const bottomPad = fabBottom + FAB_SIZE + 16;
 
@@ -107,7 +141,12 @@ export default function FeedPage() {
           data={feedPosts}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={[styles.listContent, { paddingBottom: bottomPad }]}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: bottomPad },
+            isEmpty && styles.emptyListContent,
+          ]}
+          ListEmptyComponent={renderEmpty}
           showsVerticalScrollIndicator={false}
           // 카드 높이가 글 길이·이미지 수에 따라 제각각이라 getItemLayout 을 줄 수 없고,
           // 아직 그려지지 않은 항목으로는 곧장 뛰지 못해 여기로 떨어진다. 평균 높이로
@@ -142,6 +181,30 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingTop: 8,
+  },
+  // 비어 있을 때만 세로 가운데로. 목록이 있을 때 쓰면 짧은 목록이 가운데로 몰린다.
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 40,
+  },
+  emptyTitle: {
+    color: darkGray,
+    fontFamily: FontFamily.pretendardSemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  emptyText: {
+    marginTop: 6,
+    textAlign: 'center',
+    color: gray,
+    fontFamily: FontFamily.pretendardRegular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   fab: {
     position: 'absolute',

@@ -21,9 +21,8 @@
       "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/icons/whale1.png",
-        "backgroundImage": "./assets/icons/whale1.png",
         "monochromeImage": "./assets/icons/whale1.png"
       },
       "edgeToEdgeEnabled": true,
@@ -49,10 +48,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#ffffff"
         }
       ],
       "expo-video",

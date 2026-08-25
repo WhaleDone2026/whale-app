@@ -174,8 +174,9 @@ function readResources(safety: SafetyPayload | undefined): CrisisResource[] {
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
     .map((item) => ({
       label: pickString(item, ["name", "title", "label"]) ?? "상담 전화",
-      phone: pickString(item, ["phone", "tel", "number", "contact"]),
-      url: pickString(item, ["url", "link", "href"]),
+      // 서버(ai_safety.CRISIS_RESOURCES)는 phone_number/website 로 내려준다. 이 이름이 먼저다.
+      phone: pickString(item, ["phone_number", "phone", "tel", "number", "contact"]),
+      url: pickString(item, ["website", "url", "link", "href"]),
     }))
     // 연락할 방법이 없는 항목은 안내할 이유가 없다.
     .filter((resource) => resource.phone || resource.url);

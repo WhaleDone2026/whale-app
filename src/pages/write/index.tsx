@@ -76,7 +76,7 @@ export default function WritePage() {
   const [isWhaleLoading, setIsWhaleLoading] = useState(false);
   const [whaleError, setWhaleError] = useState<string | null>(null);
   // 서버(safety 블록)가 위험 신호를 붙여 보낸 한마디인지. 시트에 상담 전화 안내를 띄운다.
-  const [isWhaleRisky, setIsWhaleRisky] = useState(false);
+  const [showCrisisNotice, setShowCrisisNotice] = useState(false);
   const [crisisResources, setCrisisResources] = useState<CrisisResource[]>([]);
   const [retryCount, setRetryCount] = useState(0);
 
@@ -97,7 +97,7 @@ export default function WritePage() {
     appliedDraftIdRef.current = null;
     setWhaleMessage('');
     setWhaleError(null);
-    setIsWhaleRisky(false);
+    setShowCrisisNotice(false);
     setCrisisResources([]);
     setRetryCount(0);
   }, []);
@@ -157,7 +157,9 @@ export default function WritePage() {
         retryCount: nextRetryCount,
       });
       setWhaleMessage(whale.message);
-      setIsWhaleRisky(whale.isRisky);
+      // 상담 전화 안내는 자해·자살 신호일 때만 띄운다. is_risky 는 폭력·혐오 같은
+      // 정책 위반(risk_type "policy")에도 true 라서 그것만으로는 판단할 수 없다.
+      setShowCrisisNotice(whale.isRisky && whale.riskType === 'self_harm');
       setCrisisResources(whale.resources);
       suggestionHistoryRef.current.push({ whaleMessage: whale.message, retryCount: nextRetryCount });
     } catch (error) {
@@ -178,7 +180,7 @@ export default function WritePage() {
     draftRef.current = { original: text, draftId: createDraftId() };
     suggestionHistoryRef.current = [];
     setWhaleMessage('');
-    setIsWhaleRisky(false);
+    setShowCrisisNotice(false);
     setCrisisResources([]);
     setRetryCount(0);
     setIsSheetVisible(true);
@@ -426,7 +428,7 @@ export default function WritePage() {
         aiResponse={whaleMessage}
         isLoading={isWhaleLoading}
         errorMessage={whaleError}
-        isRisky={isWhaleRisky}
+        showCrisisNotice={showCrisisNotice}
         crisisResources={crisisResources}
         onClose={() => setIsSheetVisible(false)}
         onRefresh={handleRefresh}
