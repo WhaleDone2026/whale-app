@@ -24,7 +24,6 @@ import {
   gray,
   lightGray,
   primary,
-  red,
   white,
 } from '@/constants/theme';
 
@@ -39,8 +38,8 @@ type Props = {
   isLoading?: boolean;
   /** 실패했을 때 말풍선에 대신 띄울 문구 */
   errorMessage?: string | null;
-  /** 서버(safety.is_risky)가 위험 신호를 감지한 글이면 상담 전화 안내를 띄운다 */
-  isRisky?: boolean;
+  /** 자해·자살 신호가 잡힌 글이면 상담 전화 안내를 띄운다 (safety.risk_type === "self_harm") */
+  showCrisisNotice?: boolean;
   /** 서버가 내려준 상담 기관. 비어 있으면 앱이 가진 기본 번호를 쓴다 */
   crisisResources?: CrisisResource[];
   /** 평가 저장 API를 연결할 때 사용한다. */
@@ -85,7 +84,7 @@ export function AIBottomSheet({
   onFeedbackSubmit,
   isLoading = false,
   errorMessage = null,
-  isRisky = false,
+  showCrisisNotice = false,
   crisisResources = [],
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -408,8 +407,8 @@ export function AIBottomSheet({
             <View style={styles.actionDivider} />
           </View>
 
-                {/* 위험 신호가 잡힌 글이면 상담 전화를 안내한다 */}
-                {isRisky ? <CrisisNotice resources={crisisResources} /> : null}
+                {/* 자해·자살 신호가 잡힌 글이면 상담 전화를 안내한다 */}
+                {showCrisisNotice ? <CrisisNotice resources={crisisResources} /> : null}
 
                 {/* 작성 내용 (수정 가능, 적용하기 누를 때만 반영) */}
                 <TextInput
@@ -549,7 +548,6 @@ function CrisisNotice({ resources }: { resources: CrisisResource[] }) {
 
   return (
     <View style={styles.crisisBox}>
-      <Text style={styles.crisisTitle}>혼자 견디지 않으셨으면 해요</Text>
       <Text style={styles.crisisBody}>
         지금 많이 힘드신 것 같아요. 24시간 이야기를 들어 주는 곳이 있어요.
       </Text>
@@ -617,12 +615,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 6,
   },
-  crisisTitle: {
-    fontFamily: FontFamily.pretendardSemiBold,
-    fontSize: 14,
-    lineHeight: 19,
-    color: darkGray,
-  },
   crisisBody: {
     fontFamily: FontFamily.pretendardRegular,
     fontSize: 12,
@@ -635,12 +627,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: red,
   },
   crisisButtonText: {
-    fontFamily: FontFamily.pretendardSemiBold,
+    fontFamily: FontFamily.pretendardBold,
     fontSize: 14,
-    color: white,
+    color: darkGray,
   },
   overlay: {
     flex: 1,
