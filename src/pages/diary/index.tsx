@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -134,14 +134,26 @@ export default function DiaryPage() {
   const weeks = useMemo(() => getCalendarWeeks(selectedYear, selectedMonth), [selectedMonth, selectedYear]);
   const entriesByDay = useMemo(() => new Map(diaryEntries.map((entry) => [entry.day, entry])), [diaryEntries]);
 
-  useEffect(() => {
-    let isMounted = true;
+  // 탭 화면은 한 번 뜨면 계속 마운트된 채로 남는다. 글을 쓰고 보관함 탭을 눌러
+  // 돌아왔을 때 방금 쓴 글이 달력에 찍히도록, 포커스될 때마다 다시 받아온다.
+  useFocusEffect(
+    useCallback(() => {
+      setReloadKey((key) => key + 1);
+    }, []),
+  );
 
+  // 달을 옮길 때만 비운다. 포커스마다 비우면 탭을 옮길 때마다 달력이 한 번씩
+  // 깜빡이므로, 다시 받아온 결과로 통째로 교체한다.
+  useEffect(() => {
     setDiaryEntries([]);
     setDiaryCategories([]);
     setFailedDiaryImages({});
     setLoadedDiaryImages({});
     setFailedCategoryImages({});
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    let isMounted = true;
 
     fetchCurrentUser()
       .then((user) => {
