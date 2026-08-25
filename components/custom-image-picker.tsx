@@ -46,7 +46,9 @@ export function CustomImagePicker({
   resolveLocalUri = false,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const [mediaPermission, requestMediaPermission, getMediaPermission] = MediaLibrary.usePermissions();
+  const [mediaPermission, requestMediaPermission, getMediaPermission] = MediaLibrary.usePermissions({
+    granularPermissions: ['photo'],
+  });
 
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -201,10 +203,10 @@ export function CustomImagePicker({
         <PickerHeader onClose={onClose} onConfirm={handleConfirm} count={selectedIds.length} />
         <View style={styles.permissionBox}>
           <Text style={styles.permissionText}>
-            사진첩에 접근하려면{'\n'}"모든 사진 허용"이 필요합니다.
+            사진첩에 접근하려면{'\n'}‘모든 사진 허용’이 필요합니다.
           </Text>
           <Text style={styles.permissionSubText}>
-            설정 → 앱 → whale-app → 권한 → 사진 및 동영상{'\n'}→ "모두 허용" 선택
+            설정 → 앱 → whale-app → 권한 → 사진 및 동영상{'\n'}→ ‘모두 허용’ 선택
           </Text>
           <TouchableOpacity style={styles.settingsBtn} onPress={() => void Linking.openSettings()}>
             <Text style={styles.settingsBtnText}>설정 열기</Text>

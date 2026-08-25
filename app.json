@@ -84,7 +84,8 @@
         {
           "photosPermission": "사진 업로드를 위해 사진첩 접근 권한이 필요합니다.",
           "savePhotosPermission": "촬영한 사진을 저장하기 위해 사진첩 접근 권한이 필요합니다.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": ["photo"]
         }
       ],
       "expo-apple-authentication",
