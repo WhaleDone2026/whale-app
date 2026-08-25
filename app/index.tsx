@@ -34,6 +34,8 @@ import {
   type PostLoginRoute,
 } from '@/src/services/onboarding';
 
+type SocialProvider = 'kakao' | 'google' | 'apple';
+
 type KakaoLoginToken = {
   idToken?: string;
   id_token?: string;
@@ -60,7 +62,10 @@ if (GOOGLE_WEB_CLIENT_ID) {
 export default function RootIndex() {
   const { width } = useWindowDimensions();
   const backgroundHeight = width * (1024 / 780);
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  // 어떤 버튼을 눌렀는지 기억해 둔다. 단순 boolean 이면 세 버튼이 한꺼번에
+  // 로딩 상태로 보여서, 누른 버튼에만 스피너를 띄우려고 provider 를 담는다.
+  const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
+  const isAuthLoading = pendingProvider !== null;
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -107,7 +112,7 @@ export default function RootIndex() {
       return;
     }
 
-    setIsAuthLoading(true);
+    setPendingProvider('kakao');
     setLoginError(null);
 
     try {
@@ -134,7 +139,7 @@ export default function RootIndex() {
       const message = error instanceof Error ? error.message : '카카오 로그인 중 문제가 발생했습니다.';
       setLoginError(message);
     } finally {
-      setIsAuthLoading(false);
+      setPendingProvider(null);
     }
   };
 
@@ -148,7 +153,7 @@ export default function RootIndex() {
       return;
     }
 
-    setIsAuthLoading(true);
+    setPendingProvider('google');
     setLoginError(null);
 
     try {
@@ -190,7 +195,7 @@ export default function RootIndex() {
       const message = error instanceof Error ? error.message : '구글 로그인 중 문제가 발생했습니다.';
       setLoginError(message);
     } finally {
-      setIsAuthLoading(false);
+      setPendingProvider(null);
     }
   };
 
@@ -204,7 +209,7 @@ export default function RootIndex() {
       return;
     }
 
-    setIsAuthLoading(true);
+    setPendingProvider('apple');
     setLoginError(null);
 
     try {
@@ -246,7 +251,7 @@ export default function RootIndex() {
       const message = error instanceof Error ? error.message : 'Apple 로그인 중 문제가 발생했습니다.';
       setLoginError(message);
     } finally {
-      setIsAuthLoading(false);
+      setPendingProvider(null);
     }
   };
 
@@ -281,7 +286,7 @@ export default function RootIndex() {
             textStyle={styles.kakaoText}
             iconStyle={styles.kakaoIcon}
             onPress={handleKakaoLogin}
-            loading={isAuthLoading}
+            loading={pendingProvider === 'kakao'}
             disabled={isAuthLoading}
           />
           <SocialLoginButton
@@ -290,7 +295,7 @@ export default function RootIndex() {
             style={styles.googleButton}
             textStyle={styles.googleText}
             onPress={handleGoogleLogin}
-            loading={isAuthLoading}
+            loading={pendingProvider === 'google'}
             disabled={isAuthLoading}
           />
           <SocialLoginButton
@@ -300,7 +305,7 @@ export default function RootIndex() {
             textStyle={styles.appleText}
             iconStyle={styles.appleIcon}
             onPress={handleAppleLogin}
-            loading={isAuthLoading}
+            loading={pendingProvider === 'apple'}
             loadingIndicatorColor="#FFFFFF"
             disabled={isAuthLoading}
           />
