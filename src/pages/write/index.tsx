@@ -21,6 +21,7 @@ import AIIcon from '@/components/icons/ai-icon';
 import UnorderedListIcon from '@/components/icons/unordered-list-icon';
 import UploadIcon from '@/components/icons/upload-icon';
 import { ImageGrid } from '@/components/image-grid';
+import { NoticeModal } from '@/components/notice-modal';
 import { PostSettingsBottomSheet } from '@/components/post-settings-bottom-sheet';
 import { ThemedButton } from '@/components/themed-button';
 import { ThemedView } from '@/components/themed-view';
@@ -60,6 +61,7 @@ export default function WritePage() {
   const [isSheetVisible, setIsSheetVisible] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const [isEmptyDiaryNoticeVisible, setIsEmptyDiaryNoticeVisible] = useState(false);
   const [images, setImages] = useState<DraftImage[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -175,7 +177,7 @@ export default function WritePage() {
     Keyboard.dismiss();
 
     if (!text.trim()) {
-      Alert.alert('일기를 먼저 작성해 주세요.');
+      setIsEmptyDiaryNoticeVisible(true);
       return;
     }
 
@@ -435,6 +437,12 @@ export default function WritePage() {
         onRefresh={handleRefresh}
         onApply={handleApply}
         onFeedbackSubmit={handleFeedbackSubmit}
+      />
+
+      <NoticeModal
+        visible={isEmptyDiaryNoticeVisible}
+        title="일기를 먼저 작성해 주세요."
+        onConfirm={() => setIsEmptyDiaryNoticeVisible(false)}
       />
     </SafeAreaView>
   );
