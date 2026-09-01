@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
+import { usePostHog } from 'posthog-react-native';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -34,6 +35,7 @@ const MAX_DESCRIPTION_LENGTH = 100;
 type DuplicateStatus = 'idle' | 'checking' | 'available' | 'taken';
 
 export default function OnboardingProfilePage() {
+  const posthog = usePostHog();
   const params = useLocalSearchParams<{ nickname?: string; profileImage?: string }>();
   const initialNickname = useMemo(() => sanitizeSingleParam(params.nickname), [params.nickname]);
   const initialProfileImage = useMemo(
@@ -152,6 +154,11 @@ export default function OnboardingProfilePage() {
         email,
       });
 
+      // 현재 온보딩에는 어조 선택 UI가 없어, 실제 선택값이 생기기 전까지는
+      // 분석에서 구분 가능한 비식별 상태값을 남긴다.
+      posthog.capture('onboarding_completed', {
+        tone_preference: 'not_configured',
+      });
       router.replace('/home');
     } catch (error) {
       const message = error instanceof Error ? error.message : '프로필 저장 중 문제가 발생했습니다.';

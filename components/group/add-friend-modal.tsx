@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
+import { usePostHog } from 'posthog-react-native';
 import {
   ActivityIndicator,
   FlatList,
@@ -31,6 +32,7 @@ type AddFriendModalProps = {
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function AddFriendModal({ visible, currentUserId, onClose }: AddFriendModalProps) {
+  const posthog = usePostHog();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AppUser[]>([]);
   const [statuses, setStatuses] = useState<Record<string, FriendRelationStatus>>({});
@@ -112,6 +114,7 @@ export function AddFriendModal({ visible, currentUserId, onClose }: AddFriendMod
 
     try {
       await sendFriendRequest(currentUserId, userId);
+      posthog.capture('friend_request_sent');
     } catch (error) {
       console.warn('[add-friend] Failed to send request', error);
       // 실패 시 원상 복구

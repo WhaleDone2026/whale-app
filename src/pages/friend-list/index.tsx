@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams, useSegments } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePostHog } from "posthog-react-native";
 import {
   ActivityIndicator,
   Alert,
@@ -43,6 +44,7 @@ type RowMenu = { userId: string; top: number; right: number };
 type ConfirmTarget = { userId: string; action: "block" };
 
 export default function FriendListPage() {
+  const posthog = usePostHog();
   const params = useLocalSearchParams<{
     userId: string;
     name?: string;
@@ -141,6 +143,7 @@ export default function FriendListPage() {
 
       try {
         await sendFriendRequest(currentUserId, userId);
+        posthog.capture("friend_request_sent");
       } catch (error) {
         console.warn("[friend-list] Failed to send request", error);
         setStatuses((current) => ({ ...current, [userId]: "none" }));
@@ -152,7 +155,7 @@ export default function FriendListPage() {
         });
       }
     },
-    [currentUserId, pendingIds],
+    [currentUserId, pendingIds, posthog],
   );
 
   const handleCancelRequest = useCallback(

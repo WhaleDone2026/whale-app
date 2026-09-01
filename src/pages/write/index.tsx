@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePostHog } from 'posthog-react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -55,6 +56,7 @@ type DraftImage = { uri: string; sourceUri: string; path?: string };
 
 export default function WritePage() {
   const router = useRouter();
+  const posthog = usePostHog();
 
   const [text, setText] = useState('');
   const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
@@ -83,6 +85,8 @@ export default function WritePage() {
   const [showCrisisNotice, setShowCrisisNotice] = useState(false);
   const [crisisResources, setCrisisResources] = useState<CrisisResource[]>([]);
   const [retryCount, setRetryCount] = useState(0);
+  const aiCoachAppliedRef = useRef(false);
+  const aiCoachRetryCountRef = useRef(0);
 
   // 이 draft 안에서 지금까지 받은 한마디 전부(성공한 것만). 마지막 항목이 곧
   // 현재 whaleMessage와 같다 — "적용하기" 시점에 마지막을 뺀 나머지가 거절된 제안들이다.
@@ -91,6 +95,20 @@ export default function WritePage() {
   // "적용하기"를 누른 draftId. 등록이 성공하면 이 draft 행에 최종 텍스트를 채운다.
   // 세션 중 AI 버튼을 여러 번 눌러도 마지막으로 적용된 draft만 최종본과 연결한다.
   const appliedDraftIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isSheetVisible) {
+      return;
+    }
+
+    return () => {
+      if (!aiCoachAppliedRef.current) {
+        posthog.capture('ai_coach_abandoned', {
+          retry_count: aiCoachRetryCountRef.current,
+        });
+      }
+    };
+  }, [isSheetVisible, posthog]);
 
   const resetForm = useCallback(() => {
     setText('');
@@ -182,18 +200,23 @@ export default function WritePage() {
     }
 
     draftRef.current = { original: text, draftId: createDraftId() };
+    aiCoachAppliedRef.current = false;
+    aiCoachRetryCountRef.current = 0;
     suggestionHistoryRef.current = [];
     setWhaleMessage('');
     setShowCrisisNotice(false);
     setCrisisResources([]);
     setRetryCount(0);
     setIsSheetVisible(true);
+    posthog.capture('ai_coach_requested', { char_count: text.trim().length });
     void requestWhaleMessage(0);
   };
 
   const handleRefresh = () => {
     const next = retryCount + 1;
     setRetryCount(next);
+    aiCoachRetryCountRef.current = next;
+    posthog.capture('ai_coach_retried', { retry_count: next });
     void requestWhaleMessage(next);
   };
 
@@ -224,6 +247,12 @@ export default function WritePage() {
           visibility,
           imageUris: images.map((image) => image.uri),
         });
+        posthog.capture('post_created', {
+          used_ai: appliedDraftIdRef.current !== null,
+          char_count: text.trim().length,
+          photo_count: images.length,
+          is_public: visibility === 'public',
+        });
       }
 
       // 등록 성공 시점에만 최종 수정본을 기록한다. resetForm이 ref를 지우기 전에
@@ -248,6 +277,12 @@ export default function WritePage() {
   };
 
   const handleApply = (appliedText: string) => {
+    aiCoachAppliedRef.current = true;
+    posthog.capture('ai_coach_applied', {
+      retry_count: aiCoachRetryCountRef.current,
+      // 이 시트에서 적용하는 원문은 AI를 열 당시의 일기다. 실제 텍스트는 보내지 않는다.
+      edited: appliedText !== draftRef.current?.original,
+    });
     setText(appliedText);
     setIsSheetVisible(false);
 

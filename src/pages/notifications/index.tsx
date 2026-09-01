@@ -2,11 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { usePostHog } from 'posthog-react-native';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { darkGray, FontFamily, gray, lightGray, primary, red, white } from '@/constants/theme';
-import { fetchIncomingFriendRequests, respondToFriendRequest } from '@/src/services/friends';
+import {
+  fetchAcceptedFriendIds,
+  fetchIncomingFriendRequests,
+  respondToFriendRequest,
+} from '@/src/services/friends';
 import {
   AppNotification,
   fetchNotificationsForUserId,
@@ -146,6 +151,7 @@ function FriendRequestItem({
 }
 
 export default function NotificationsPage() {
+  const posthog = usePostHog();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [friendRequests, setFriendRequests] = useState<AppUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -214,6 +220,12 @@ export default function NotificationsPage() {
 
     try {
       await respondToFriendRequest(requester.id, currentUserId, accept);
+      if (accept) {
+        const friendIds = await fetchAcceptedFriendIds(currentUserId);
+        posthog.capture('friend_added', { friend_count: friendIds.length });
+        // 요청을 보낸 상대방도 친구가 한 명 늘지만, 클라이언트에서는 다른 사용자의
+        // PostHog ID로 안전하게 capture할 수 없다. 상대방 이벤트는 서버 계측이 필요하다.
+      }
     } catch (error) {
       console.warn('[notifications] Failed to respond to friend request', error);
       // 실패 시 목록에 복구

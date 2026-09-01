@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePostHog } from "posthog-react-native";
 import {
   ActivityIndicator,
   Alert,
@@ -387,6 +388,7 @@ function CommentItem({
 
 export function FeedPostCard({ post, onDeleted }: Props) {
   const router = useRouter();
+  const posthog = usePostHog();
   // FriendsProvider 는 home 탭에만 있어서, 보관함·프로필 탭에서도 쓰이는 이 카드는
   // 컨텍스트 대신 프로바이더에 의존하지 않는 훅을 쓴다.
   const currentUserId = useCurrentUserId();
@@ -553,6 +555,11 @@ export function FeedPostCard({ post, onDeleted }: Props) {
         setLocalComments((prev) => [...prev, createdComment]);
       }
 
+      posthog.capture("reaction_sent", {
+        type: "comment",
+        post_id: post.id,
+      });
+
       setReplyingTo(null);
       setDraftComment("");
     } catch (error) {
@@ -579,6 +586,12 @@ export function FeedPostCard({ post, onDeleted }: Props) {
     try {
       const nextLiked = await togglePostLike(post.id);
       setIsLiked(nextLiked);
+      if (nextLiked) {
+        posthog.capture("reaction_sent", {
+          type: "like",
+          post_id: post.id,
+        });
+      }
     } catch (error) {
       setIsLiked(previousLiked);
       setLikeCount(previousCount);
@@ -619,6 +632,12 @@ export function FeedPostCard({ post, onDeleted }: Props) {
           is_liked: nextLiked,
         })),
       );
+      if (nextLiked) {
+        posthog.capture("reaction_sent", {
+          type: "like",
+          post_id: post.id,
+        });
+      }
     } catch (error) {
       setLocalComments(previousComments);
       const message =
