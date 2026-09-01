@@ -35,6 +35,7 @@ import { useCurrentUserId } from "@/hooks/use-current-user-id";
 import { blockUser } from "@/src/services/blocks";
 import {
   createComment,
+  deleteComment,
   deletePost,
   toggleCommentLike,
   togglePostLike,
@@ -229,25 +230,71 @@ function appendReplyToComment(
   });
 }
 
+function removeCommentFromTree(
+  comments: FeedComment[],
+  commentId: string,
+): FeedComment[] {
+  return comments
+    .filter((comment) => comment.id !== commentId)
+    .map((comment) => ({
+      ...comment,
+      replies: comment.replies
+        ? removeCommentFromTree(comment.replies, commentId)
+        : undefined,
+    }));
+}
+
+function removeCommentsByUserId(
+  comments: FeedComment[],
+  userId: string,
+): FeedComment[] {
+  return comments
+    .filter((comment) => comment.user_id !== userId)
+    .map((comment) => ({
+      ...comment,
+      replies: comment.replies
+        ? removeCommentsByUserId(comment.replies, userId)
+        : undefined,
+    }));
+}
+
 function CommentItem({
   comment,
   isReply = false,
+  isOwnComment = false,
   onToggleLike,
   onReply,
+  onOpenMenu,
+  isMenuOpen = false,
+  onDelete,
+  onBlock,
+  onReport,
   isLikePending = false,
   isReplyTarget = false,
 }: {
   comment: FeedComment;
   isReply?: boolean;
+  isOwnComment?: boolean;
   onToggleLike: (commentId: string) => void;
   onReply?: (comment: FeedComment) => void;
+  onOpenMenu?: (comment: FeedComment) => void;
+  isMenuOpen?: boolean;
+  onDelete?: (comment: FeedComment) => void;
+  onBlock?: (comment: FeedComment) => void;
+  onReport?: (comment: FeedComment) => void;
   isLikePending?: boolean;
   isReplyTarget?: boolean;
 }) {
   const isLiked = comment.is_liked ?? false;
 
   return (
-    <View style={[styles.sheetCommentRow, isReply && styles.sheetReplyRow]}>
+    <View
+      style={[
+        styles.sheetCommentRow,
+        isReply && styles.sheetReplyRow,
+        isMenuOpen && styles.sheetCommentRowMenuOpen,
+      ]}
+    >
       <ProfileAvatar uri={comment.profile_image_url} size={isReply ? 40 : 42} />
       <View style={styles.sheetCommentBody}>
         <View style={styles.sheetNameRow}>
@@ -275,20 +322,65 @@ function CommentItem({
           </Pressable>
         ) : null}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={isLiked ? "댓글 좋아요 취소" : "댓글 좋아요"}
-        hitSlop={10}
-        disabled={isLikePending}
-        onPress={() => onToggleLike(comment.id)}
-        style={styles.commentLikeButton}
-      >
-        <Ionicons
-          name={isLiked ? "heart" : "heart-outline"}
-          size={20}
-          color={isLiked ? red : gray}
-        />
-      </Pressable>
+      <View style={styles.commentActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isLiked ? "댓글 좋아요 취소" : "댓글 좋아요"}
+          hitSlop={10}
+          disabled={isLikePending}
+          onPress={() => onToggleLike(comment.id)}
+          style={styles.commentLikeButton}
+        >
+          <Ionicons
+            name={isLiked ? "heart" : "heart-outline"}
+            size={20}
+            color={isLiked ? red : gray}
+          />
+        </Pressable>
+        {onOpenMenu && (isOwnComment ? onDelete : onBlock && onReport) ? (
+          <View style={styles.commentMenuAnchor}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="내 댓글 메뉴"
+              hitSlop={10}
+              onPress={() => onOpenMenu(comment)}
+              style={styles.commentMoreButton}
+            >
+              <Ionicons name="ellipsis-vertical" size={18} color={gray} />
+            </Pressable>
+            {isMenuOpen ? (
+              <View style={styles.commentMenu}>
+                {isOwnComment ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onDelete?.(comment)}
+                    style={styles.commentMenuItem}
+                  >
+                    <Text style={styles.commentMenuDelete}>삭제</Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => onBlock?.(comment)}
+                      style={styles.commentMenuItem}
+                    >
+                      <Text style={styles.commentMenuText}>차단</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => onReport?.(comment)}
+                      style={styles.commentMenuItem}
+                    >
+                      <Text style={styles.commentMenuDelete}>신고</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -317,6 +409,11 @@ export function FeedPostCard({ post, onDeleted }: Props) {
   const [likeCount, setLikeCount] = useState(post.like_count);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isPostLikePending, setIsPostLikePending] = useState(false);
+  const [commentMenuTarget, setCommentMenuTarget] = useState<FeedComment | null>(null);
+  const [commentToDelete, setCommentToDelete] = useState<FeedComment | null>(null);
+  const [isCommentDeleting, setIsCommentDeleting] = useState(false);
+  const [commentToBlock, setCommentToBlock] = useState<FeedComment | null>(null);
+  const [isCommentBlocking, setIsCommentBlocking] = useState(false);
   const [pendingLikeCommentId, setPendingLikeCommentId] = useState<
     string | null
   >(null);
@@ -335,6 +432,7 @@ export function FeedPostCard({ post, onDeleted }: Props) {
   );
   const closeComments = useCallback(() => {
     setIsCommentsOpen(false);
+    setCommentMenuTarget(null);
     setReplyingTo(null);
     setDraftComment("");
     setCommentError(null);
@@ -531,6 +629,72 @@ export function FeedPostCard({ post, onDeleted }: Props) {
     } finally {
       setPendingLikeCommentId(null);
     }
+  };
+
+  const handleDeleteComment = async () => {
+    if (!commentToDelete || isCommentDeleting) {
+      return;
+    }
+
+    setIsCommentDeleting(true);
+    setCommentError(null);
+
+    try {
+      await deleteComment(commentToDelete.id);
+      setLocalComments((comments) =>
+        removeCommentFromTree(comments, commentToDelete.id),
+      );
+      if (replyingTo?.id === commentToDelete.id) {
+        setReplyingTo(null);
+      }
+      setCommentToDelete(null);
+    } catch (error) {
+      setCommentToDelete(null);
+      setCommentError(
+        error instanceof Error ? error.message : "댓글 삭제에 실패했습니다.",
+      );
+    } finally {
+      setIsCommentDeleting(false);
+    }
+  };
+
+  const handleBlockComment = async () => {
+    if (!commentToBlock || isCommentBlocking) {
+      return;
+    }
+
+    setIsCommentBlocking(true);
+    setCommentError(null);
+
+    try {
+      await blockUser(commentToBlock.user_id);
+      setLocalComments((comments) =>
+        removeCommentsByUserId(comments, commentToBlock.user_id),
+      );
+      if (replyingTo?.id === commentToBlock.id) {
+        setReplyingTo(null);
+      }
+      setCommentToBlock(null);
+    } catch (error) {
+      setCommentToBlock(null);
+      setCommentError(
+        error instanceof Error ? error.message : "차단하지 못했습니다.",
+      );
+    } finally {
+      setIsCommentBlocking(false);
+    }
+  };
+
+  const handleReportComment = (comment: FeedComment) => {
+    setCommentMenuTarget(null);
+    router.push({
+      pathname: "/report",
+      params: {
+        targetType: "comment",
+        targetId: comment.id,
+        targetName: comment.username,
+      },
+    });
   };
 
   const handleEdit = () => {
@@ -800,8 +964,24 @@ export function FeedPostCard({ post, onDeleted }: Props) {
                 <View key={`sheet-${post.id}-${comment.id}`}>
                   <CommentItem
                     comment={comment}
+                    isOwnComment={currentUserId === comment.user_id}
                     onToggleLike={handleToggleCommentLike}
                     onReply={handleReply}
+                    onOpenMenu={(target) =>
+                      setCommentMenuTarget((current) =>
+                        current?.id === target.id ? null : target,
+                      )
+                    }
+                    isMenuOpen={commentMenuTarget?.id === comment.id}
+                    onDelete={(target) => {
+                      setCommentMenuTarget(null);
+                      setCommentToDelete(target);
+                    }}
+                    onBlock={(target) => {
+                      setCommentMenuTarget(null);
+                      setCommentToBlock(target);
+                    }}
+                    onReport={handleReportComment}
                     isLikePending={pendingLikeCommentId === comment.id}
                     isReplyTarget={replyingTo?.id === comment.id}
                   />
@@ -810,7 +990,23 @@ export function FeedPostCard({ post, onDeleted }: Props) {
                       key={`reply-${post.id}-${reply.id}`}
                       comment={reply}
                       isReply
+                      isOwnComment={currentUserId === reply.user_id}
                       onToggleLike={handleToggleCommentLike}
+                      onOpenMenu={(target) =>
+                        setCommentMenuTarget((current) =>
+                          current?.id === target.id ? null : target,
+                        )
+                      }
+                      isMenuOpen={commentMenuTarget?.id === reply.id}
+                      onDelete={(target) => {
+                        setCommentMenuTarget(null);
+                        setCommentToDelete(target);
+                      }}
+                      onBlock={(target) => {
+                        setCommentMenuTarget(null);
+                        setCommentToBlock(target);
+                      }}
+                      onReport={handleReportComment}
                       isLikePending={pendingLikeCommentId === reply.id}
                     />
                   ))}
@@ -882,6 +1078,29 @@ export function FeedPostCard({ post, onDeleted }: Props) {
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={commentToDelete != null}
+        title="이 댓글을 삭제할까요?"
+        message="삭제한 댓글은 되돌릴 수 없어요."
+        confirmLabel="삭제"
+        destructive
+        isPending={isCommentDeleting}
+        onConfirm={handleDeleteComment}
+        onCancel={() => setCommentToDelete(null)}
+      />
+
+      <ConfirmModal
+        visible={commentToBlock != null}
+        title={`${commentToBlock?.username ?? "이 사용자"}님을 차단할까요?`}
+        message="차단하면 서로의 게시글과 댓글을 볼 수 없어요."
+        confirmLabel="차단"
+        image={cryingWhaleImage}
+        destructive
+        isPending={isCommentBlocking}
+        onConfirm={handleBlockComment}
+        onCancel={() => setCommentToBlock(null)}
+      />
 
       <ConfirmModal
         visible={isDeleteConfirmOpen}
@@ -1172,6 +1391,10 @@ const styles = StyleSheet.create({
     gap: 14,
     minHeight: 78,
   },
+  sheetCommentRowMenuOpen: {
+    zIndex: 4,
+    elevation: 4,
+  },
   sheetReplyRow: {
     marginLeft: 52,
     marginTop: 2,
@@ -1247,7 +1470,51 @@ const styles = StyleSheet.create({
     height: 36,
     alignItems: "center",
     justifyContent: "center",
+  },
+  commentActions: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginTop: 18,
+  },
+  commentMoreButton: {
+    width: 26,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  commentMenuAnchor: {
+    position: "relative",
+    zIndex: 3,
+  },
+  commentMenu: {
+    position: "absolute",
+    top: 34,
+    right: 0,
+    minWidth: 64,
+    backgroundColor: white,
+    borderRadius: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  commentMenuItem: {
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  commentMenuDelete: {
+    color: red,
+    fontFamily: FontFamily.pretendardMedium,
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  commentMenuText: {
+    color: darkGray,
+    fontFamily: FontFamily.pretendardMedium,
+    fontSize: 12,
+    lineHeight: 14,
   },
   commentInputBar: {
     borderTopWidth: StyleSheet.hairlineWidth,

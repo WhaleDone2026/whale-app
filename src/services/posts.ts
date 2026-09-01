@@ -445,6 +445,35 @@ export async function createComment(
   };
 }
 
+/** 현재 로그인한 사용자가 작성한 댓글을 삭제한다. */
+export async function deleteComment(commentId: string): Promise<void> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    throw new Error('로그인이 필요합니다.');
+  }
+
+  // UI에서 작성자 댓글에만 노출하더라도 user_id 조건을 한 번 더 둔다.
+  const { data, error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', user.id)
+    .select('id');
+
+  if (error) {
+    console.warn('[posts] Failed to delete comment', error);
+    throw new Error('댓글 삭제에 실패했습니다.');
+  }
+
+  if (!data?.length) {
+    throw new Error('삭제할 권한이 없거나 댓글을 찾을 수 없습니다.');
+  }
+}
+
 export async function toggleCommentLike(commentId: string): Promise<boolean> {
   const {
     data: { user },
