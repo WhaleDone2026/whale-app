@@ -6,6 +6,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -358,7 +359,7 @@ export default function WritePage() {
             contentContainerStyle={styles.contentContainer}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}>
-            {selectedImages.length > 0 && (
+            {images.length > 0 && (
               <View style={styles.gridWrapper}>
                 <ImageGrid uris={images.map((image) => image.uri)} onRemove={removeImage} />
               </View>
