@@ -161,6 +161,11 @@ export default function RootIndex() {
       // 에러로 죽는 걸 막고, 업데이트 안내 다이얼로그를 띄워 준다. iOS 에서는 통과한다.
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
+      // Google SDK가 이전에 선택한 계정을 자동으로 재사용하지 않도록
+      // 앱에 저장된 Google 로그인 상태만 지운 뒤 계정 선택을 다시 연다.
+      // Supabase 세션이나 기기의 Google 계정에는 영향을 주지 않는다.
+      await GoogleSignin.signOut().catch(() => undefined);
+
       const response = await GoogleSignin.signIn();
 
       // 사용자가 시트를 닫은 경우. 실패가 아니라서 에러 문구를 띄우지 않는다.
