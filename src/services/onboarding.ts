@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 
 import { supabase } from '@/src/lib/supabase';
+import { unregisterPushToken } from '@/src/services/push';
 
 type ProfileOnboardingRow = {
   id: string;
@@ -123,9 +124,29 @@ async function upsertProfileStub(
 
     const { error } = await supabase.from('profiles').update(updateFields).eq('id', userId);
 
-    if (error) {
-      throw mapOnboardingError(error);
+    if (!error) {
+      return;
     }
+
+    // 소셜 계정 이름이 남이 이미 쓰는 닉네임과 겹치면 여기서 23505 가 난다. 이름은
+    // 프로필 단계에서 중복 검사를 거쳐 다시 받는 값이라, 그 프리필 하나 때문에 약관
+    // 동의가 막히면 안 된다. 이름만 빼고 나머지(이메일·프로필 사진)는 반영한다.
+    if (error.code === '23505' && updateFields.name) {
+      const { name: _droppedName, ...rest } = updateFields;
+
+      if (Object.keys(rest).length === 0) {
+        return;
+      }
+
+      const { error: retryError } = await supabase.from('profiles').update(rest).eq('id', userId);
+
+      if (retryError) {
+        throw mapOnboardingError(retryError);
+      }
+      return;
+    }
+
+    throw mapOnboardingError(error);
   };
 
   const { data: existing, error: existingError } = await supabase
@@ -144,13 +165,34 @@ async function upsertProfileStub(
   }
 
   // 신규 row 는 NOT NULL 컬럼(name, tag)에 임시값을 채워 넣는다. 프로필 단계에서 실제 값으로 교체된다.
-  const { error: insertError } = await supabase.from('profiles').insert({
-    id: userId,
-    email: email || null,
-    name: name || createPendingName(userId),
-    profile_image_url: profileImageUrl || null,
-    tag: createPendingTag(userId),
-  });
+  const insertStub = (stubName: string) =>
+    supabase.from('profiles').insert({
+      id: userId,
+      email: email || null,
+      name: stubName,
+      profile_image_url: profileImageUrl || null,
+      tag: createPendingTag(userId),
+    });
+
+  let { error: insertError } = await insertStub(name || createPendingName(userId));
+
+  // 23505 를 "이미 내 행이 있다"로만 해석하면 안 된다. name 은 UNIQUE 인데 소셜
+  // 로그인은 남이 쓰는 이름을 그대로 들고 올 수 있어서, 이름 충돌도 같은 코드로 온다.
+  // 그걸 id 충돌로 오인하면 행을 못 만든 채 성공한 셈 치고 넘어가고, 다음 단계인
+  // user_terms_agreements 가 FK 위반으로 터진다 (구글 로그인에서 실제로 발생).
+  if (insertError?.code === '23505' && name) {
+    const { data: created } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle<{ id: string }>();
+
+    if (!created) {
+      // 이름이 겹친 것이므로 유저별로 유일한 임시 이름으로 다시 만든다.
+      // 실제 닉네임은 다음 단계에서 중복 검사를 거쳐 받는다.
+      ({ error: insertError } = await insertStub(createPendingName(userId)));
+    }
+  }
 
   if (insertError?.code === '23505') {
     await updateProfile();
@@ -453,6 +495,10 @@ export async function signInAsTestUser(): Promise<User> {
 }
 
 export async function signOutUser(): Promise<void> {
+  // 세션이 살아 있을 때 지워야 한다. signOut 이후에는 RLS가 auth.uid() 를 못 찾아
+  // 삭제가 조용히 실패하고, 로그아웃한 계정의 알림이 이 기기로 계속 온다.
+  await unregisterPushToken();
+
   const { error } = await supabase.auth.signOut();
 
   if (error) {

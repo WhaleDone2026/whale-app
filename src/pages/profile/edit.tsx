@@ -25,33 +25,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ArrowIcon } from '@/components/icons/arrow-icon';
+import { DEFAULT_WHALE_ID, LOCKED_WHALE_IMAGE, WHALES, type Whale } from '@/constants/whales';
 import { background, darkGray, FontFamily, gray, lightGray, primary, white } from '@/constants/theme';
 import {
   AppUser,
   fetchCurrentUser,
   saveCoverImage,
   saveProfileImage,
-  updateSelectedCharacterLevel,
+  updateSelectedWhaleId,
   updateUserProfile,
 } from '@/src/services/users';
 
-const whale1Image = require('../../../assets/icons/whale1.png');
-const cryingWhaleImage = require('../../../assets/icons/crying_whale.png');
-const angryWhaleImage = require('../../../assets/icons/angry_whale.png');
-const lockWhaleImage = require('../../../assets/icons/lock_whale.png');
-
-type Character = {
-  level: number;
-  /** 이 일수(고래와 함께한 날) 이상이면 잠금 해제 */
-  unlockDay: number;
-  image: number;
-};
-
-const CHARACTERS: Character[] = [
-  { level: 1, unlockDay: 0, image: whale1Image },
-  { level: 2, unlockDay: 30, image: cryingWhaleImage },
-  { level: 3, unlockDay: 100, image: angryWhaleImage },
-];
+// 고래 목록은 constants/whales.ts 한 곳에서 관리한다. 예전에는 이 화면 안에만 있어서
+// 마이페이지·친구 화면은 whale1 을 하드코딩하고 있었다.
+const CHARACTERS = WHALES;
 
 const MAX_NICKNAME_LENGTH = 10;
 const MAX_DESCRIPTION_LENGTH = 100;
@@ -71,6 +58,7 @@ const emptyProfile: AppUser = {
   description: '',
   installed_at: new Date().toISOString(),
   intimacy_level: 1,
+  whale_id: DEFAULT_WHALE_ID,
   friends_count: 0,
   like_count: 0,
   post_count: 0,
@@ -97,7 +85,7 @@ export default function ProfileEditPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const carouselRef = useRef<FlatList<Character>>(null);
+  const carouselRef = useRef<FlatList<Whale>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const installedDays = getInstalledDays(currentUser.installed_at);
@@ -116,7 +104,7 @@ export default function ProfileEditPage() {
         setTag(user.tag);
         setDescription(user.description);
         setProfileImage(user.profile_image);
-        setSelectedLevel(user.intimacy_level || 1);
+        setSelectedLevel(user.whale_id || DEFAULT_WHALE_ID);
       })
       .catch((error) => {
         console.warn('[profile-edit] Failed to load profile', error);
@@ -152,8 +140,8 @@ export default function ProfileEditPage() {
         description,
       });
 
-      if (selectedLevel !== currentUser.intimacy_level) {
-        await updateSelectedCharacterLevel(currentUser.id, selectedLevel);
+      if (selectedLevel !== currentUser.whale_id) {
+        await updateSelectedWhaleId(currentUser.id, selectedLevel);
       }
 
       router.back();
@@ -163,7 +151,7 @@ export default function ProfileEditPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [currentUser.id, currentUser.intimacy_level, description, isSaving, nickname, selectedLevel, tag]);
+  }, [currentUser.id, currentUser.whale_id, description, isSaving, nickname, selectedLevel, tag]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -339,7 +327,7 @@ export default function ProfileEditPage() {
             <FlatList
               ref={carouselRef}
               data={CHARACTERS}
-              keyExtractor={(item) => String(item.level)}
+              keyExtractor={(item) => String(item.id)}
               horizontal
               showsHorizontalScrollIndicator={false}
               snapToInterval={ITEM_WIDTH}
@@ -353,7 +341,7 @@ export default function ProfileEditPage() {
               extraData={selectedLevel}
               renderItem={({ item, index }) => {
                 const unlocked = installedDays >= item.unlockDay;
-                const selected = selectedLevel === item.level;
+                const selected = selectedLevel === item.id;
                 const inputRange = [
                   (index - 1) * ITEM_WIDTH,
                   index * ITEM_WIDTH,
@@ -371,7 +359,7 @@ export default function ProfileEditPage() {
                       character={item}
                       unlocked={unlocked}
                       selected={selected}
-                      onSelect={() => setSelectedLevel(item.level)}
+                      onSelect={() => setSelectedLevel(item.id)}
                     />
                   </Animated.View>
                 );
@@ -402,7 +390,7 @@ export default function ProfileEditPage() {
 
           <View style={styles.dots}>
             {CHARACTERS.map((character, index) => (
-              <View key={character.level} style={[styles.dot, index === activeIndex && styles.dotActive]} />
+              <View key={character.id} style={[styles.dot, index === activeIndex && styles.dotActive]} />
             ))}
           </View>
 
@@ -419,7 +407,7 @@ function CharacterCard({
   selected,
   onSelect,
 }: {
-  character: Character;
+  character: Whale;
   unlocked: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -431,7 +419,7 @@ function CharacterCard({
           <Image source={character.image} style={styles.cardWhale} contentFit="contain" />
         ) : (
           <>
-            <Image source={lockWhaleImage} style={styles.cardWhale} contentFit="contain" tintColor="#D2D5DA" />
+            <Image source={LOCKED_WHALE_IMAGE} style={styles.cardWhale} contentFit="contain" tintColor="#D2D5DA" />
             <View style={styles.lockIconWrap}>
               <Ionicons name="lock-closed" size={44} color="#7A7E85" />
             </View>
@@ -441,12 +429,12 @@ function CharacterCard({
 
       <View style={styles.cardLevelRow}>
         <Text style={styles.cardLevelLabel}>친밀도</Text>
-        <Text style={styles.cardLevelValue}>{character.level}단계</Text>
+        <Text style={styles.cardLevelValue}>{character.id}단계</Text>
       </View>
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={unlocked ? `${character.level}단계 캐릭터 선택` : '잠긴 캐릭터'}
+        accessibilityLabel={unlocked ? `${character.id}단계 캐릭터 선택` : '잠긴 캐릭터'}
         disabled={!unlocked}
         onPress={onSelect}
         style={({ pressed }) => [

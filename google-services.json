@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "634228636638",
+    "project_id": "whale-app-505205",
+    "storage_bucket": "whale-app-505205.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:634228636638:android:8b5e030884f94fc57bbb4f",
+        "android_client_info": {
+          "package_name": "com.whaledone.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfA_R7XdpVmxmDDLbc7_17KhiIJmOTAu0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

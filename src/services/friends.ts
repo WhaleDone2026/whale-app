@@ -1,4 +1,5 @@
 import { supabase } from '@/src/lib/supabase';
+import { fetchBlockedUserIds } from '@/src/services/blocks';
 import type { AppUser } from '@/src/services/users';
 import { mapUserRowToAppUser } from '@/src/services/users';
 
@@ -15,6 +16,7 @@ type ProfileRow = {
   description: string | null;
   installed_at: string;
   intimacy_level: number;
+  whale_id: number | null;
 };
 
 export async function fetchAcceptedFriendIds(userId: string): Promise<string[]> {
@@ -45,7 +47,7 @@ export async function fetchAcceptedFriendsForUser(userId: string): Promise<AppUs
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level')
+    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level, whale_id')
     .in('id', friendIds)
     .returns<ProfileRow[]>();
 
@@ -94,7 +96,7 @@ export async function searchUsersByKeyword(
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level')
+    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level, whale_id')
     .neq('id', currentUserId)
     .or(`name.ilike.${pattern},tag.ilike.${pattern}`)
     .limit(20)
@@ -108,7 +110,11 @@ export async function searchUsersByKeyword(
     return [];
   }
 
-  return data.map(mapUserRowToAppUser);
+  // 나를 차단한 사람은 RLS 가 이미 걸러 준다. 내가 차단한 사람은 (차단 해제를 위해)
+  // 프로필이 계속 보이므로 검색 결과에서는 직접 제외한다.
+  const blockedIds = await fetchBlockedUserIds();
+
+  return data.filter((row) => !blockedIds.has(row.id)).map(mapUserRowToAppUser);
 }
 
 type FriendRequestStatusRow = {
@@ -224,7 +230,7 @@ export async function fetchIncomingFriendRequests(userId: string): Promise<AppUs
 
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
-    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level')
+    .select('id, name, tag, profile_image_url, description, installed_at, intimacy_level, whale_id')
     .in('id', requesterIds)
     .returns<ProfileRow[]>();
 

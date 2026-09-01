@@ -2,9 +2,9 @@
   "expo": {
     "name": "whale-app",
     "slug": "whale-app",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
-    "icon": "./assets/icons/whale1.png",
+    "icon": "./assets/icons/whaleapp_icon.png",
     "scheme": "whaleapp",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -19,11 +19,11 @@
     "android": {
       "package": "com.whaledone.myapp",
       "versionCode": 2,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/icons/whale1.png",
-        "backgroundImage": "./assets/icons/whale1.png",
-        "monochromeImage": "./assets/icons/whale1.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/icons/whaleapp.png",
+        "monochromeImage": "./assets/icons/whaleapp.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -45,13 +45,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/icons/whaleapp.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#ffffff"
         }
       ],
       "expo-video",

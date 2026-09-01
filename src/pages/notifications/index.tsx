@@ -2,12 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { darkGray, FontFamily, gray, lightGray, primary, red, white } from '@/constants/theme';
 import { fetchIncomingFriendRequests, respondToFriendRequest } from '@/src/services/friends';
-import { AppNotification, fetchNotificationsForUserId } from '@/src/services/notifications';
+import {
+  AppNotification,
+  fetchNotificationsForUserId,
+  markNotificationsRead,
+} from '@/src/services/notifications';
 import { fetchCurrentUser, type AppUser } from '@/src/services/users';
 
 const SECTION_LABELS: Record<AppNotification['section'], string> = {
@@ -60,11 +64,24 @@ function NotificationAvatar({ notification }: { notification: AppNotification })
   );
 }
 
-function NotificationItem({ notification }: { notification: AppNotification }) {
+function NotificationItem({
+  notification,
+  onPress,
+}: {
+  notification: AppNotification;
+  onPress: (postId: string) => void;
+}) {
   const actorName = getActorName(notification);
+  const targetPostId = notification.targetPostId;
 
   return (
-    <View style={styles.notificationItem}>
+    <Pressable
+      accessibilityRole={targetPostId ? 'button' : undefined}
+      // 글이 없는 알림(또는 글이 지워진 경우)까지 눌리는 것처럼 보이면, 눌러도
+      // 아무 일이 없어서 고장난 것처럼 느껴진다. 눌림 효과도 같이 끈다.
+      disabled={!targetPostId}
+      onPress={() => targetPostId && onPress(targetPostId)}
+      style={({ pressed }) => [styles.notificationItem, pressed && styles.notificationPressed]}>
       <NotificationAvatar notification={notification} />
       <View style={styles.notificationBody}>
         <Text style={styles.notificationText}>
@@ -82,7 +99,7 @@ function NotificationItem({ notification }: { notification: AppNotification }) {
       ) : (
         <View style={styles.thumbnailPlaceholder} />
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -133,6 +150,8 @@ export default function NotificationsPage() {
   const [friendRequests, setFriendRequests] = useState<AppUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, boolean>>({});
+  // 처음 받아오는 동안 '알림이 없어요'가 깜빡이지 않게 로딩을 구분한다.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -156,15 +175,33 @@ export default function NotificationsPage() {
 
         setNotifications(nextNotifications);
         setFriendRequests(nextRequests);
+
+        // 목록을 받은 뒤에 읽음 처리한다. 먼저 하면 이번 화면에서 NEW 뱃지가 사라져서
+        // 무엇이 새 알림이었는지 알 수 없다. 화면을 벗어난 뒤부터 깨끗해진다.
+        void markNotificationsRead(user.id);
       })
       .catch((error) => {
         console.warn('[notifications] Failed to load notifications', error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       });
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // 글 상세 화면이 따로 없어서 피드로 보내고 그 글까지 스크롤시킨다.
+  // push 가 아니라 navigate 를 쓰는 이유: push 면 홈 화면이 스택에 하나 더 쌓여서
+  // 뒤로 가기를 두 번 눌러야 한다.
+  const handleNotificationPress = (postId: string) => {
+    router.navigate({ pathname: '/(tabs)/home', params: { postId } });
+  };
+
+  const isEmpty = friendRequests.length === 0 && notifications.length === 0;
 
   const handleRespond = async (requester: AppUser, accept: boolean) => {
     if (!currentUserId || pendingRequestIds[requester.id]) {
@@ -205,7 +242,26 @@ export default function NotificationsPage() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[styles.content, isEmpty && styles.emptyContent]}
+        showsVerticalScrollIndicator={false}>
+        {/* 친구 요청도 알림도 없을 때. 로딩 중에는 문구 대신 스피너를 둔다 */}
+        {isEmpty ? (
+          <View style={styles.emptyBox}>
+            {isLoading ? (
+              <ActivityIndicator color={gray} />
+            ) : (
+              <>
+                <Text style={styles.emptyTitle}>아직 알림이 없어요</Text>
+                <Text style={styles.emptyText}>
+                  친구들이 남긴 좋아요와 댓글이 여기에 모여요.
+                </Text>
+              </>
+            )}
+          </View>
+        ) : null}
+
         {friendRequests.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>친구 요청</Text>
@@ -234,7 +290,11 @@ export default function NotificationsPage() {
               <Text style={styles.sectionTitle}>{SECTION_LABELS[section]}</Text>
               <View style={styles.sectionList}>
                 {sectionNotifications.map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    onPress={handleNotificationPress}
+                  />
                 ))}
               </View>
             </View>
@@ -279,6 +339,30 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 96,
+  },
+  // 빈 화면일 때만 세로 가운데로. 목록이 있을 때 쓰면 짧은 목록이 가운데로 몰린다.
+  emptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingBottom: 40,
+  },
+  emptyTitle: {
+    color: darkGray,
+    fontFamily: FontFamily.pretendardSemiBold,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  emptyText: {
+    marginTop: 6,
+    textAlign: 'center',
+    color: gray,
+    fontFamily: FontFamily.pretendardRegular,
+    fontSize: 13,
+    lineHeight: 18,
   },
   section: {
     paddingTop: 16,
@@ -365,6 +449,9 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 0.5,
     borderBottomColor: lightGray,
+  },
+  notificationPressed: {
+    backgroundColor: lightGray,
   },
   avatarWrap: {
     width: 40,

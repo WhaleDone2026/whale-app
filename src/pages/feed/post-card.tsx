@@ -1,8 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -15,23 +17,55 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 
-import type { FeedComment, FeedPost } from '@/src/types/api/feed-post';
+import type { FeedComment, FeedPost } from "@/src/types/api/feed-post";
 
-import { darkGray, FontFamily, gray, lightGray, primary, red, white } from '@/constants/theme';
-import { createComment, toggleCommentLike, togglePostLike } from '@/src/services/posts';
+import { ConfirmModal } from "@/components/confirm-modal";
+import {
+  darkGray,
+  FontFamily,
+  gray,
+  lightGray,
+  primary,
+  red,
+  white,
+} from "@/constants/theme";
+import { useCurrentUserId } from "@/hooks/use-current-user-id";
+import { blockUser } from "@/src/services/blocks";
+import {
+  createComment,
+  deletePost,
+  toggleCommentLike,
+  togglePostLike,
+} from "@/src/services/posts";
+
+const cryingWhaleImage = require("../../../assets/icons/crying_whale.png");
 
 type Props = {
   post: FeedPost;
+  /** 삭제가 끝났을 때. 목록을 들고 있는 화면이 직접 정리하고 싶을 때 쓴다 */
+  onDeleted?: (postId: string) => void;
 };
 
 function ProfileAvatar({ uri, size }: { uri: string | null; size: number }) {
-  const hasUri = typeof uri === 'string' && uri.length > 0;
+  const hasUri = typeof uri === "string" && uri.length > 0;
   if (hasUri) {
-    return <Image source={{ uri: uri! }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+    return (
+      <Image
+        source={{ uri: uri! }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+      />
+    );
   }
-  return <View style={[styles.avatarPlaceholder, { width: size, height: size, borderRadius: size / 2 }]} />;
+  return (
+    <View
+      style={[
+        styles.avatarPlaceholder,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    />
+  );
 }
 
 function GridTile({ uri, style }: { uri: string; style?: object }) {
@@ -64,7 +98,9 @@ function PostImageGrid({ urls }: { urls: string[] }) {
 
   if (images.length === 2) {
     return (
-      <View style={[styles.gridContainer, styles.gridAspectSquare, styles.gridRow]}>
+      <View
+        style={[styles.gridContainer, styles.gridAspectSquare, styles.gridRow]}
+      >
         <GridTile uri={images[0]} />
         <GridTile uri={images[1]} />
       </View>
@@ -73,7 +109,13 @@ function PostImageGrid({ urls }: { urls: string[] }) {
 
   if (images.length === 3) {
     return (
-      <View style={[styles.gridContainer, styles.gridAspectSquare, styles.gridThree]}>
+      <View
+        style={[
+          styles.gridContainer,
+          styles.gridAspectSquare,
+          styles.gridThree,
+        ]}
+      >
         <View style={styles.gridThreeLeft}>
           <GridTile uri={images[0]} />
         </View>
@@ -87,7 +129,13 @@ function PostImageGrid({ urls }: { urls: string[] }) {
 
   if (images.length === 4) {
     return (
-      <View style={[styles.gridContainer, styles.gridAspectSquare, styles.gridColumn]}>
+      <View
+        style={[
+          styles.gridContainer,
+          styles.gridAspectSquare,
+          styles.gridColumn,
+        ]}
+      >
         <View style={styles.gridRow}>
           <GridTile uri={images[0]} />
           <GridTile uri={images[1]} />
@@ -102,7 +150,9 @@ function PostImageGrid({ urls }: { urls: string[] }) {
 
   if (images.length === 5) {
     return (
-      <View style={[styles.gridContainer, styles.gridAspectFive, styles.gridColumn]}>
+      <View
+        style={[styles.gridContainer, styles.gridAspectFive, styles.gridColumn]}
+      >
         <View style={styles.gridRow}>
           <GridTile uri={images[0]} />
           <GridTile uri={images[1]} />
@@ -117,7 +167,9 @@ function PostImageGrid({ urls }: { urls: string[] }) {
   }
 
   return (
-    <View style={[styles.gridContainer, styles.gridAspectSix, styles.gridColumn]}>
+    <View
+      style={[styles.gridContainer, styles.gridAspectSix, styles.gridColumn]}
+    >
       <View style={styles.gridRow}>
         <GridTile uri={images[0]} />
         <GridTile uri={images[1]} />
@@ -133,7 +185,10 @@ function PostImageGrid({ urls }: { urls: string[] }) {
 }
 
 function getCommentCount(comments: FeedComment[]) {
-  return comments.reduce((count, comment) => count + 1 + (comment.replies?.length ?? 0), 0);
+  return comments.reduce(
+    (count, comment) => count + 1 + (comment.replies?.length ?? 0),
+    0,
+  );
 }
 
 function updateCommentInTree(
@@ -197,7 +252,9 @@ function CommentItem({
       <View style={styles.sheetCommentBody}>
         <View style={styles.sheetNameRow}>
           <Text style={styles.sheetUsername}>{comment.username}</Text>
-          {comment.is_author ? <Text style={styles.authorBadge}>작성자</Text> : null}
+          {comment.is_author ? (
+            <Text style={styles.authorBadge}>작성자</Text>
+          ) : null}
         </View>
         <Text style={styles.sheetCommentText}>{comment.content}</Text>
         {!isReply && onReply ? (
@@ -205,45 +262,81 @@ function CommentItem({
             accessibilityRole="button"
             hitSlop={8}
             onPress={() => onReply(comment)}
-            style={({ pressed }) => pressed && styles.pressed}>
-            <Text style={[styles.replyText, isReplyTarget && styles.replyTextActive]}>Reply</Text>
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text
+              style={[
+                styles.replyText,
+                isReplyTarget && styles.replyTextActive,
+              ]}
+            >
+              Reply
+            </Text>
           </Pressable>
         ) : null}
       </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={isLiked ? '댓글 좋아요 취소' : '댓글 좋아요'}
+        accessibilityLabel={isLiked ? "댓글 좋아요 취소" : "댓글 좋아요"}
         hitSlop={10}
         disabled={isLikePending}
         onPress={() => onToggleLike(comment.id)}
-        style={styles.commentLikeButton}>
-        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? red : gray} />
+        style={styles.commentLikeButton}
+      >
+        <Ionicons
+          name={isLiked ? "heart" : "heart-outline"}
+          size={20}
+          color={isLiked ? red : gray}
+        />
       </Pressable>
     </View>
   );
 }
 
-export function FeedPostCard({ post }: Props) {
+export function FeedPostCard({ post, onDeleted }: Props) {
+  const router = useRouter();
+  // FriendsProvider 는 home 탭에만 있어서, 보관함·프로필 탭에서도 쓰이는 이 카드는
+  // 컨텍스트 대신 프로바이더에 의존하지 않는 훅을 쓴다.
+  const currentUserId = useCurrentUserId();
+  const isOwner = currentUserId != null && currentUserId === post.user_id;
+
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
+  // 목록을 들고 있는 화면이 여러 곳이라, 삭제되면 카드가 스스로 사라진다.
+  const [isDeleted, setIsDeleted] = useState(false);
+
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [isCommentsMounted, setIsCommentsMounted] = useState(false);
-  const [draftComment, setDraftComment] = useState('');
-  const [localComments, setLocalComments] = useState<FeedComment[]>(post.comments);
+  const [draftComment, setDraftComment] = useState("");
+  const [localComments, setLocalComments] = useState<FeedComment[]>(
+    post.comments,
+  );
   const [isLiked, setIsLiked] = useState(post.is_liked ?? false);
   const [likeCount, setLikeCount] = useState(post.like_count);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isPostLikePending, setIsPostLikePending] = useState(false);
-  const [pendingLikeCommentId, setPendingLikeCommentId] = useState<string | null>(null);
+  const [pendingLikeCommentId, setPendingLikeCommentId] = useState<
+    string | null
+  >(null);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [replyingTo, setReplyingTo] = useState<{ id: string; username: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{
+    id: string;
+    username: string;
+  } | null>(null);
   const [isPostMenuOpen, setIsPostMenuOpen] = useState(false);
   const sheetProgress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const commentInputRef = useRef<TextInput>(null);
-  const commentCount = useMemo(() => getCommentCount(localComments), [localComments]);
+  const commentCount = useMemo(
+    () => getCommentCount(localComments),
+    [localComments],
+  );
   const closeComments = useCallback(() => {
     setIsCommentsOpen(false);
     setReplyingTo(null);
-    setDraftComment('');
+    setDraftComment("");
     setCommentError(null);
   }, []);
 
@@ -260,7 +353,8 @@ export function FeedPostCard({ post }: Props) {
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 4,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 4,
         onPanResponderMove: (_, gestureState) => {
           dragY.setValue(Math.max(0, gestureState.dy));
         },
@@ -346,18 +440,26 @@ export function FeedPostCard({ post }: Props) {
     setCommentError(null);
 
     try {
-      const createdComment = await createComment(post.id, content, post.user_id, parentCommentId);
+      const createdComment = await createComment(
+        post.id,
+        content,
+        post.user_id,
+        parentCommentId,
+      );
 
       if (parentCommentId) {
-        setLocalComments((prev) => appendReplyToComment(prev, parentCommentId, createdComment));
+        setLocalComments((prev) =>
+          appendReplyToComment(prev, parentCommentId, createdComment),
+        );
       } else {
         setLocalComments((prev) => [...prev, createdComment]);
       }
 
       setReplyingTo(null);
-      setDraftComment('');
+      setDraftComment("");
     } catch (error) {
-      const message = error instanceof Error ? error.message : '댓글 등록에 실패했습니다.';
+      const message =
+        error instanceof Error ? error.message : "댓글 등록에 실패했습니다.";
       setCommentError(message);
     } finally {
       setIsSubmittingComment(false);
@@ -382,8 +484,9 @@ export function FeedPostCard({ post }: Props) {
     } catch (error) {
       setIsLiked(previousLiked);
       setLikeCount(previousCount);
-      const message = error instanceof Error ? error.message : '좋아요 처리에 실패했습니다.';
-      console.warn('[feed-post-card] Failed to toggle post like', message);
+      const message =
+        error instanceof Error ? error.message : "좋아요 처리에 실패했습니다.";
+      console.warn("[feed-post-card] Failed to toggle post like", message);
     } finally {
       setIsPostLikePending(false);
     }
@@ -420,12 +523,82 @@ export function FeedPostCard({ post }: Props) {
       );
     } catch (error) {
       setLocalComments(previousComments);
-      const message = error instanceof Error ? error.message : '댓글 좋아요 처리에 실패했습니다.';
+      const message =
+        error instanceof Error
+          ? error.message
+          : "댓글 좋아요 처리에 실패했습니다.";
       setCommentError(message);
     } finally {
       setPendingLikeCommentId(null);
     }
   };
+
+  const handleEdit = () => {
+    setIsPostMenuOpen(false);
+    router.push({ pathname: "/(tabs)/write", params: { postId: post.id } });
+  };
+
+  const handleDelete = async () => {
+    if (isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deletePost(post.id);
+      setIsDeleteConfirmOpen(false);
+      setIsDeleted(true);
+      onDeleted?.(post.id);
+    } catch (error) {
+      setIsDeleteConfirmOpen(false);
+      Alert.alert(
+        error instanceof Error ? error.message : "게시글 삭제에 실패했습니다.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleBlock = async () => {
+    if (isBlocking) {
+      return;
+    }
+
+    setIsBlocking(true);
+    try {
+      await blockUser(post.user_id);
+      setIsBlockConfirmOpen(false);
+      // 차단하면 이 사람 글은 더 이상 보이면 안 되므로 카드를 즉시 걷어낸다.
+      setIsDeleted(true);
+      onDeleted?.(post.id);
+      // 친구 목록은 화면에 다시 들어올 때 갱신된다. 차단당한 사람의 글은 RLS 가
+      // 이미 가리므로, 목록이 잠깐 낡아도 내용이 새는 일은 없다.
+    } catch (error) {
+      setIsBlockConfirmOpen(false);
+      Alert.alert(
+        error instanceof Error ? error.message : "차단하지 못했습니다.",
+      );
+    } finally {
+      setIsBlocking(false);
+    }
+  };
+
+  // 사유 선택은 별도 화면에서 받는다.
+  const handleReport = () => {
+    setIsPostMenuOpen(false);
+    router.push({
+      pathname: "/report",
+      params: {
+        targetType: "post",
+        targetId: post.id,
+        targetName: post.username,
+      },
+    });
+  };
+
+  if (isDeleted) {
+    return null;
+  }
 
   return (
     <View style={styles.card}>
@@ -458,17 +631,54 @@ export function FeedPostCard({ post }: Props) {
                   accessibilityRole="button"
                   accessibilityLabel="게시글 메뉴"
                   hitSlop={10}
-                  onPress={() => setIsPostMenuOpen((open) => !open)}>
+                  onPress={() => setIsPostMenuOpen((open) => !open)}
+                >
                   <Ionicons name="ellipsis-horizontal" size={20} color={gray} />
                 </Pressable>
                 {isPostMenuOpen ? (
                   <View style={styles.postMenu}>
-                    <Pressable accessibilityRole="button" style={styles.postMenuItem}>
-                      <Text style={styles.postMenuEdit}>수정</Text>
-                    </Pressable>
-                    <Pressable accessibilityRole="button" style={styles.postMenuItem}>
-                      <Text style={styles.postMenuDelete}>삭제</Text>
-                    </Pressable>
+                    {/* 내 글은 수정·삭제, 친구 글은 차단·신고 */}
+                    {isOwner ? (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.postMenuItem}
+                          onPress={handleEdit}
+                        >
+                          <Text style={styles.postMenuEdit}>수정</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.postMenuItem}
+                          onPress={() => {
+                            setIsPostMenuOpen(false);
+                            setIsDeleteConfirmOpen(true);
+                          }}
+                        >
+                          <Text style={styles.postMenuDelete}>삭제</Text>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.postMenuItem}
+                          onPress={() => {
+                            setIsPostMenuOpen(false);
+                            setIsBlockConfirmOpen(true);
+                          }}
+                        >
+                          <Text style={styles.postMenuEdit}>차단</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          style={styles.postMenuItem}
+                          onPress={handleReport}
+                        >
+                          <Text style={styles.postMenuDelete}>신고</Text>
+                        </Pressable>
+                      </>
+                    )}
                   </View>
                 ) : null}
               </View>
@@ -483,14 +693,19 @@ export function FeedPostCard({ post }: Props) {
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={isLiked ? '좋아요 취소' : '좋아요'}
+            accessibilityLabel={isLiked ? "좋아요 취소" : "좋아요"}
             hitSlop={8}
             disabled={isPostLikePending}
             onPress={() => {
               void handleTogglePostLike();
             }}
-            style={styles.actionItem}>
-            <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? red : gray} />
+            style={styles.actionItem}
+          >
+            <Ionicons
+              name={isLiked ? "heart" : "heart-outline"}
+              size={20}
+              color={isLiked ? red : gray}
+            />
             <Text style={styles.actionCount}>{likeCount}</Text>
           </Pressable>
           <Pressable
@@ -498,21 +713,30 @@ export function FeedPostCard({ post }: Props) {
             accessibilityLabel="댓글 보기"
             hitSlop={8}
             onPress={() => setIsCommentsOpen(true)}
-            style={styles.actionItem}>
+            style={styles.actionItem}
+          >
             <Ionicons name="chatbubble-outline" size={18} color={gray} />
             <Text style={styles.actionCount}>{commentCount}</Text>
           </Pressable>
         </View>
 
         {localComments.length > 0 ? (
-          <Pressable accessibilityRole="button" onPress={() => setIsCommentsOpen(true)} style={styles.comments}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setIsCommentsOpen(true)}
+            style={styles.comments}
+          >
             {localComments.map((c) => (
               <View key={`${post.id}-${c.id}`} style={styles.commentRow}>
                 <ProfileAvatar uri={c.profile_image_url} size={28} />
                 <Text style={styles.commentUsername} numberOfLines={1}>
                   {c.username}
                 </Text>
-                <Text style={styles.commentContent} numberOfLines={1} ellipsizeMode="tail">
+                <Text
+                  style={styles.commentContent}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {c.content}
                 </Text>
               </View>
@@ -525,15 +749,31 @@ export function FeedPostCard({ post }: Props) {
         visible={isCommentsMounted}
         transparent
         animationType="none"
-        onRequestClose={closeComments}>
+        onRequestClose={closeComments}
+      >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheetOverlay}>
-          <Animated.View style={[styles.sheetBackdrop, { opacity: backdropOpacity }]}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeComments} />
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+          style={styles.sheetOverlay}
+        >
+          <Animated.View
+            style={[styles.sheetBackdrop, { opacity: backdropOpacity }]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={closeComments}
+            />
           </Animated.View>
-          <Animated.View style={[styles.commentSheet, { transform: [{ translateY: draggedSheetTranslateY }] }]}>
-            <View style={styles.sheetDragHandle} {...sheetPanResponder.panHandlers}>
+          <Animated.View
+            style={[
+              styles.commentSheet,
+              { transform: [{ translateY: draggedSheetTranslateY }] },
+            ]}
+          >
+            <View
+              style={styles.sheetDragHandle}
+              {...sheetPanResponder.panHandlers}
+            >
               <View style={styles.sheetHandle} />
             </View>
             <View style={styles.sheetHeader}>
@@ -542,7 +782,8 @@ export function FeedPostCard({ post }: Props) {
                 accessibilityLabel="댓글 닫기"
                 hitSlop={10}
                 onPress={closeComments}
-                style={styles.sheetBackButton}>
+                style={styles.sheetBackButton}
+              >
                 <Ionicons name="arrow-back" size={24} color={darkGray} />
               </Pressable>
               <Text style={styles.sheetTitle}>댓글</Text>
@@ -552,7 +793,9 @@ export function FeedPostCard({ post }: Props) {
             <ScrollView
               style={styles.sheetList}
               contentContainerStyle={styles.sheetListContent}
-              showsVerticalScrollIndicator={false}>
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               {localComments.map((comment) => (
                 <View key={`sheet-${post.id}-${comment.id}`}>
                   <CommentItem
@@ -573,7 +816,9 @@ export function FeedPostCard({ post }: Props) {
                   ))}
                 </View>
               ))}
-              {commentError ? <Text style={styles.commentErrorText}>{commentError}</Text> : null}
+              {commentError ? (
+                <Text style={styles.commentErrorText}>{commentError}</Text>
+              ) : null}
             </ScrollView>
 
             <View style={styles.commentInputBar}>
@@ -587,7 +832,11 @@ export function FeedPostCard({ post }: Props) {
                     accessibilityLabel="답글 취소"
                     hitSlop={8}
                     onPress={() => setReplyingTo(null)}
-                    style={({ pressed }) => [styles.replyingCancel, pressed && styles.pressed]}>
+                    style={({ pressed }) => [
+                      styles.replyingCancel,
+                      pressed && styles.pressed,
+                    ]}
+                  >
                     <Ionicons name="close" size={16} color={gray} />
                   </Pressable>
                 </View>
@@ -597,7 +846,7 @@ export function FeedPostCard({ post }: Props) {
                   ref={commentInputRef}
                   value={draftComment}
                   onChangeText={setDraftComment}
-                  placeholder={replyingTo ? '답글 남기기' : '댓글 남기기'}
+                  placeholder={replyingTo ? "답글 남기기" : "댓글 남기기"}
                   placeholderTextColor="#B1B1B1"
                   style={styles.commentInput}
                   returnKeyType="send"
@@ -609,14 +858,19 @@ export function FeedPostCard({ post }: Props) {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="댓글 등록"
-                  disabled={isSubmittingComment || draftComment.trim().length === 0}
+                  disabled={
+                    isSubmittingComment || draftComment.trim().length === 0
+                  }
                   onPress={() => {
                     void submitComment();
                   }}
                   style={[
                     styles.sendButton,
-                    draftComment.trim().length > 0 && !isSubmittingComment && styles.sendButtonActive,
-                  ]}>
+                    draftComment.trim().length > 0 &&
+                      !isSubmittingComment &&
+                      styles.sendButtonActive,
+                  ]}
+                >
                   {isSubmittingComment ? (
                     <ActivityIndicator color={white} size="small" />
                   ) : (
@@ -628,16 +882,39 @@ export function FeedPostCard({ post }: Props) {
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmModal
+        visible={isDeleteConfirmOpen}
+        title="이 게시글을 삭제할까요?"
+        message="삭제하면 사진과 댓글도 함께 사라지고 되돌릴 수 없어요."
+        confirmLabel="삭제"
+        destructive
+        isPending={isDeleting}
+        onConfirm={handleDelete}
+        onCancel={() => setIsDeleteConfirmOpen(false)}
+      />
+
+      <ConfirmModal
+        visible={isBlockConfirmOpen}
+        title={`친구 관계를 정말 해제하시겠습니까?`}
+        message="해제 후에는 서로의 게시글을 볼 수 없어요."
+        confirmLabel="해제"
+        image={cryingWhaleImage}
+        destructive
+        isPending={isBlocking}
+        onConfirm={handleBlock}
+        onCancel={() => setIsBlockConfirmOpen(false)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     marginBottom: 14,
-    width: '100%',
-    overflow: 'visible',
+    width: "100%",
+    overflow: "visible",
   },
   cardContent: {
     paddingHorizontal: 20,
@@ -649,18 +926,18 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   menuAnchor: {
-    position: 'relative',
+    position: "relative",
     zIndex: 2,
   },
   postMenu: {
-    position: 'absolute',
+    position: "absolute",
     top: 26,
     right: 0,
     minWidth: 80,
     paddingRight: 24,
     backgroundColor: white,
     borderRadius: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 4,
@@ -669,7 +946,7 @@ const styles = StyleSheet.create({
   postMenuItem: {
     paddingHorizontal: 4,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   postMenuEdit: {
     fontFamily: FontFamily.pretendardMedium,
@@ -684,8 +961,8 @@ const styles = StyleSheet.create({
     color: red,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 12,
   },
@@ -694,22 +971,22 @@ const styles = StyleSheet.create({
   },
   headerMiddle: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 8,
     minWidth: 0,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     flexShrink: 1,
     minWidth: 0,
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flexShrink: 0,
   },
@@ -724,7 +1001,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: gray,
     flexShrink: 1,
-      marginLeft: 6
+    marginLeft: 6,
   },
   relativeTime: {
     fontFamily: FontFamily.pretendardRegular,
@@ -732,8 +1009,8 @@ const styles = StyleSheet.create({
     color: gray,
   },
   gridContainer: {
-    width: '100%',
-    alignSelf: 'stretch',
+    width: "100%",
+    alignSelf: "stretch",
     marginBottom: 12,
     gap: 3,
   },
@@ -747,36 +1024,36 @@ const styles = StyleSheet.create({
     aspectRatio: 3 / 2,
   },
   gridColumn: {
-    width: '100%',
-    flexDirection: 'column',
+    width: "100%",
+    flexDirection: "column",
   },
   gridRow: {
     flex: 1,
-    width: '100%',
-    flexDirection: 'row',
+    width: "100%",
+    flexDirection: "row",
     gap: 3,
   },
   gridThree: {
-    width: '100%',
-    flexDirection: 'row',
+    width: "100%",
+    flexDirection: "row",
     gap: 3,
   },
   gridThreeLeft: {
     flex: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   gridThreeRight: {
     flex: 1,
-    flexDirection: 'column',
+    flexDirection: "column",
     gap: 3,
   },
   gridTileInner: {
     flex: 1,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   gridImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   gridPlaceholder: {
     flex: 1,
@@ -791,14 +1068,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
     marginBottom: 10,
   },
   actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   actionCount: {
@@ -808,13 +1085,13 @@ const styles = StyleSheet.create({
   },
   comments: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E8ECEE',
+    borderTopColor: "#E8ECEE",
     paddingTop: 10,
     gap: 10,
   },
   commentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     minWidth: 0,
   },
@@ -833,46 +1110,46 @@ const styles = StyleSheet.create({
   },
   sheetOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   commentSheet: {
-    height: '82%',
+    height: "82%",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     backgroundColor: white,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   sheetDragHandle: {
     height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sheetHandle: {
-    alignSelf: 'center',
+    alignSelf: "center",
     width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E8E8E8',
+    backgroundColor: "#E8E8E8",
   },
   sheetHeader: {
     height: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
   },
   sheetBackButton: {
     width: 20,
     height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   sheetTitle: {
-    color: '#111111',
+    color: "#111111",
     fontFamily: FontFamily.pretendardMedium,
     fontSize: 16,
     lineHeight: 22,
@@ -890,8 +1167,8 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   sheetCommentRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 14,
     minHeight: 78,
   },
@@ -904,8 +1181,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   sheetNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   sheetUsername: {
@@ -915,12 +1192,12 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   authorBadge: {
-    overflow: 'hidden',
+    overflow: "hidden",
     borderRadius: 2,
     backgroundColor: lightGray,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    color: '#777777',
+    color: "#777777",
     fontFamily: FontFamily.pretendardMedium,
     fontSize: 10,
     lineHeight: 12,
@@ -943,9 +1220,9 @@ const styles = StyleSheet.create({
     color: primary,
   },
   replyingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 10,
     paddingHorizontal: 4,
   },
@@ -959,8 +1236,8 @@ const styles = StyleSheet.create({
   replyingCancel: {
     width: 24,
     height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   pressed: {
     opacity: 0.7,
@@ -968,27 +1245,27 @@ const styles = StyleSheet.create({
   commentLikeButton: {
     width: 36,
     height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 18,
   },
   commentInputBar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#EFEFEF',
+    borderTopColor: "#EFEFEF",
     paddingHorizontal: 24,
     paddingTop: 14,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 14,
+    paddingBottom: Platform.OS === "ios" ? 28 : 14,
     backgroundColor: white,
   },
   commentInputPill: {
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#EFEFEF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: "#EFEFEF",
+    flexDirection: "row",
+    alignItems: "center",
     paddingLeft: 20,
     paddingRight: 3,
-    marginBottom: 15
+    marginBottom: 15,
   },
   commentInput: {
     flex: 1,
@@ -1002,17 +1279,17 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 16,
-    backgroundColor: '#777777',
-    alignItems: 'center',
-    justifyContent: 'center',
-    right: 2
+    backgroundColor: "#777777",
+    alignItems: "center",
+    justifyContent: "center",
+    right: 2,
   },
   sendButtonActive: {
     backgroundColor: primary,
   },
   commentErrorText: {
     marginTop: 8,
-    color: '#D04444',
+    color: "#D04444",
     fontFamily: FontFamily.pretendardRegular,
     fontSize: 12,
     lineHeight: 16,

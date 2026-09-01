@@ -191,7 +191,11 @@ export default function DiaryCategoryFeedPage() {
             onPress={() => router.push('/(tabs)/home/notifications')}>
             <Ionicons name="notifications-outline" size={22} color={darkGray} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="설정" hitSlop={8}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="설정"
+            hitSlop={8}
+            onPress={() => router.push('/(tabs)/profile/settings')}>
             <Ionicons name="settings-outline" size={22} color={darkGray} />
           </Pressable>
         </View>

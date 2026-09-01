@@ -24,9 +24,14 @@ const CELL_SIZE = Math.floor((SCREEN_WIDTH - GAP * 2) / 3);
 const PAGE_SIZE = 60;
 
 interface Props {
-  onConfirm: (uris: string[]) => void;
+  /**
+   * @param uris        확정된 이미지 URI. resolveLocalUri 를 켜면 읽기 가능한 file:// 로 변환된 값이다.
+   * @param sourceUris  변환 전 원본 에셋 URI. initialSelectedUris 로 다시 넘기면 재선택이 복원된다.
+   */
+  onConfirm: (uris: string[], sourceUris: string[]) => void;
   onClose: () => void;
   maxSelect?: number;
+  /** 원본 에셋 URI 목록 (onConfirm 의 sourceUris) */
   initialSelectedUris?: string[];
   /**
    * true 면 확정 시 미디어 라이브러리 에셋을 읽기 가능한 로컬 파일(file://) URI 로 변환해 전달한다.
@@ -156,8 +161,10 @@ export function CustomImagePicker({
       .map(id => ({ id, uri: photos.find(p => p.id === id)?.uri }))
       .filter((s): s is { id: string; uri: string } => !!s.uri);
 
+    const sourceUris = selected.map(s => s.uri);
+
     if (!resolveLocalUri) {
-      onConfirm(selected.map(s => s.uri));
+      onConfirm(sourceUris, sourceUris);
       return;
     }
 
@@ -178,7 +185,7 @@ export function CustomImagePicker({
       }),
     );
 
-    onConfirm(resolved);
+    onConfirm(resolved, sourceUris);
   };
 
   if (!mediaPermission) return null;

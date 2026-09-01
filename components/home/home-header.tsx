@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { NotificationBellIcon } from '@/components/notification-bell-icon';
 import { background, darkGray, FontFamily, primary, white } from '@/constants/theme';
+import { useUnseenNotifications } from '@/hooks/use-unseen-notifications';
 
 function Segment({
   label,
@@ -26,6 +28,7 @@ function Segment({
 
 export function HomeHeader({ active }: { active: 'feed' | 'group' }) {
   const router = useRouter();
+  const hasUnseen = useUnseenNotifications();
 
   const go = (tab: 'feed' | 'group') => {
     if (tab === 'feed') {
@@ -45,12 +48,13 @@ export function HomeHeader({ active }: { active: 'feed' | 'group' }) {
             onPress={() => router.push('/(tabs)/home/notifications')}
             hitSlop={8}
             style={styles.iconHit}>
-            <Ionicons name="notifications-outline" size={22} color={darkGray} />
+            <NotificationBellIcon hasUnseen={hasUnseen} color={darkGray} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="설정"
             hitSlop={8}
+            onPress={() => router.push('/(tabs)/profile/settings')}
             style={styles.iconHit}>
             <Ionicons name="settings-outline" size={22} color={darkGray} />
           </Pressable>

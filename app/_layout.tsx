@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { posthog } from '@/src/lib/posthog';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { supabase } from '@/src/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();
@@ -67,6 +68,8 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
+  usePushNotifications();
+
   if (!loaded && !fontError) {
     return null;
   }
@@ -90,5 +93,17 @@ export default function RootLayout() {
         <StatusBar style="auto" />
       </ThemeProvider>
     </PostHogProvider>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding/terms" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding/profile" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* 신고는 피드·친구 프로필·친구 목록 어디서든 열리므로 루트에 둔다 */}
+        <Stack.Screen name="report" options={{ headerShown: false }} />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+      </Stack>
+      <StatusBar style="auto" />
+    </ThemeProvider>
   );
 }

@@ -18,6 +18,7 @@ import { HomeHeader } from "@/components/home/home-header";
 import { AddFriendModal } from "@/components/group/add-friend-modal";
 import { AnimatedWaveBackground } from "@/components/group/animated-wave-background";
 import { WaterDropDecoration } from "@/components/group/water-drop-decoration";
+import { getWhaleImage } from "@/constants/whales";
 import {
   background,
   darkGray,
@@ -28,7 +29,6 @@ import {
 } from "@/constants/theme";
 import { useFriends } from "@/src/contexts/friends";
 import type { AppUser } from "@/src/services/users";
-const whaleCharacter = require("../../../assets/icons/whale1.png");
 const whaleGradation = require("../../../assets/icons/gradation.png");
 const fullWhaleImage = require("../../../assets/icons/full_whale.png");
 const MAX_FRIENDS = 20;
@@ -123,7 +123,7 @@ function CloseIcon() {
   );
 }
 
-function FloatingWhale() {
+function FloatingWhale({ whaleId }: { whaleId: number }) {
   const motion = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -172,7 +172,7 @@ function FloatingWhale() {
       ]}
     >
       <Image
-        source={whaleCharacter}
+        source={getWhaleImage(whaleId)}
         style={styles.characterImage}
         contentFit="contain"
       />
@@ -353,7 +353,7 @@ export default function GroupPage() {
                     style={styles.characterGradation}
                     contentFit="contain"
                   />
-                  <FloatingWhale />
+                  <FloatingWhale whaleId={friend.whale_id} />
                 </View>
                 <Text style={styles.characterName}>{friend.name}</Text>
                 <Text style={styles.characterTag}>@{friend.tag}</Text>
@@ -384,7 +384,7 @@ export default function GroupPage() {
                 <View style={styles.profileLeft}>
                   <View style={styles.profileImageFrame}>
                     <Image
-                      source={whaleCharacter}
+                      source={getWhaleImage(selectedFriend.whale_id)}
                       style={styles.profileImage}
                       contentFit="contain"
                     />

@@ -1,6 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +18,14 @@ import {
   ViewStyle,
 } from 'react-native';
 import { login } from '@react-native-seoul/kakao-login';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { GoogleIcon } from '@/components/icons/google-icon';
 import {FontFamily, gray} from "@/constants/theme";
 import { supabase } from '@/src/lib/supabase';
 import {
@@ -26,15 +34,38 @@ import {
   type PostLoginRoute,
 } from '@/src/services/onboarding';
 
+type SocialProvider = 'kakao' | 'google' | 'apple';
+
 type KakaoLoginToken = {
   idToken?: string;
   id_token?: string;
 };
 
+// Google Cloud Console 에서 만든 OAuth 클라이언트 ID. 비밀값이 아니라 앱에 그대로
+// 들어가는 값이고, client secret 은 Supabase 쪽에만 넣는다.
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+
+// configure 는 signIn 전에 한 번만 부르면 된다. 화면이 다시 그려질 때마다 부를
+// 이유가 없어서 모듈 로드 시점에 처리한다.
+//
+// webClientId 가 핵심이다 — 이 값이 없으면 Android 에서 idToken 이 null 로 와서
+// Supabase 에 넘길 게 없어진다. iOS 는 iosClientId 로 자기 클라이언트를 찾는다.
+if (GOOGLE_WEB_CLIENT_ID) {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    scopes: ['profile', 'email'],
+  });
+}
+
 export default function RootIndex() {
   const { width } = useWindowDimensions();
   const backgroundHeight = width * (1024 / 780);
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  // 어떤 버튼을 눌렀는지 기억해 둔다. 단순 boolean 이면 세 버튼이 한꺼번에
+  // 로딩 상태로 보여서, 누른 버튼에만 스피너를 띄우려고 provider 를 담는다.
+  const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
+  const isAuthLoading = pendingProvider !== null;
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -81,7 +112,7 @@ export default function RootIndex() {
       return;
     }
 
-    setIsAuthLoading(true);
+    setPendingProvider('kakao');
     setLoginError(null);
 
     try {
@@ -108,7 +139,63 @@ export default function RootIndex() {
       const message = error instanceof Error ? error.message : '카카오 로그인 중 문제가 발생했습니다.';
       setLoginError(message);
     } finally {
-      setIsAuthLoading(false);
+      setPendingProvider(null);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      setLoginError('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID 환경 변수를 확인해주세요.');
+      return;
+    }
+
+    setPendingProvider('google');
+    setLoginError(null);
+
+    try {
+      // Android 전용 검사다. Play 서비스가 없거나 낡은 기기에서 signIn 이 알 수 없는
+      // 에러로 죽는 걸 막고, 업데이트 안내 다이얼로그를 띄워 준다. iOS 에서는 통과한다.
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      const response = await GoogleSignin.signIn();
+
+      // 사용자가 시트를 닫은 경우. 실패가 아니라서 에러 문구를 띄우지 않는다.
+      if (!isSuccessResponse(response)) {
+        return;
+      }
+
+      const idToken = response.data.idToken;
+
+      if (!idToken) {
+        throw new Error('구글 로그인 결과에서 idToken을 찾을 수 없습니다.');
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      const user = await confirmAuthenticatedUser();
+      const route = await getPostLoginRoute(user);
+      navigateAfterLogin(route);
+    } catch (error) {
+      // 구버전 네이티브 경로는 취소를 응답이 아니라 예외로 던진다. 둘 다 막아 둔다.
+      if (isErrorWithCode(error) && error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : '구글 로그인 중 문제가 발생했습니다.';
+      setLoginError(message);
+    } finally {
+      setPendingProvider(null);
     }
   };
 
@@ -122,7 +209,7 @@ export default function RootIndex() {
       return;
     }
 
-    setIsAuthLoading(true);
+    setPendingProvider('apple');
     setLoginError(null);
 
     try {
@@ -164,7 +251,7 @@ export default function RootIndex() {
       const message = error instanceof Error ? error.message : 'Apple 로그인 중 문제가 발생했습니다.';
       setLoginError(message);
     } finally {
-      setIsAuthLoading(false);
+      setPendingProvider(null);
     }
   };
 
@@ -199,7 +286,16 @@ export default function RootIndex() {
             textStyle={styles.kakaoText}
             iconStyle={styles.kakaoIcon}
             onPress={handleKakaoLogin}
-            loading={isAuthLoading}
+            loading={pendingProvider === 'kakao'}
+            disabled={isAuthLoading}
+          />
+          <SocialLoginButton
+            label="Google로 시작하기"
+            iconElement={<GoogleIcon size={18} />}
+            style={styles.googleButton}
+            textStyle={styles.googleText}
+            onPress={handleGoogleLogin}
+            loading={pendingProvider === 'google'}
             disabled={isAuthLoading}
           />
           <SocialLoginButton
@@ -209,7 +305,7 @@ export default function RootIndex() {
             textStyle={styles.appleText}
             iconStyle={styles.appleIcon}
             onPress={handleAppleLogin}
-            loading={isAuthLoading}
+            loading={pendingProvider === 'apple'}
             loadingIndicatorColor="#FFFFFF"
             disabled={isAuthLoading}
           />
@@ -222,10 +318,13 @@ export default function RootIndex() {
 
 type SocialLoginButtonProps = {
   label: string;
-  icon: ImageSourcePropType;
+  /** PNG 로고용. 구글처럼 SVG 로 그리는 로고는 iconElement 를 쓴다. */
+  icon?: ImageSourcePropType;
+  /** 구글 로고는 4색 벡터라 PNG 로 두면 해상도마다 흐려진다. */
+  iconElement?: ReactNode;
   style: ViewStyle;
   textStyle: TextStyle;
-  iconStyle: ImageStyle;
+  iconStyle?: ImageStyle;
   onPress: () => void;
   loading?: boolean;
   loadingIndicatorColor?: string;
@@ -235,6 +334,7 @@ type SocialLoginButtonProps = {
 function SocialLoginButton({
   label,
   icon,
+  iconElement,
   style,
   textStyle,
   iconStyle,
@@ -252,9 +352,11 @@ function SocialLoginButton({
       style={({ pressed }) => [styles.loginButton, style, disabled && styles.disabled, pressed && styles.pressed]}>
       {loading ? (
         <ActivityIndicator color={loadingIndicatorColor} size="small" style={styles.loginIcon} />
-      ) : (
+      ) : iconElement ? (
+        <View style={styles.loginIcon}>{iconElement}</View>
+      ) : icon ? (
         <Image source={icon} style={[styles.loginIcon, iconStyle]} resizeMode="contain" />
-      )}
+      ) : null}
       <Text style={[styles.buttonText, textStyle]}>{label}</Text>
     </Pressable>
   );
@@ -323,6 +425,13 @@ const styles = StyleSheet.create({
   appleButton: {
     backgroundColor: '#000000',
   },
+  // 흰 배경이라 그냥 두면 배경 이미지 위에서 경계가 안 보인다. 구글 가이드라인도
+  // 흰 버튼에는 테두리를 두도록 정하고 있다.
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DADCE0',
+  },
   pressed: {
     opacity: 0.82,
   },
@@ -351,6 +460,9 @@ const styles = StyleSheet.create({
   },
   appleText: {
     color: '#FFFFFF',
+  },
+  googleText: {
+    color: '#1F1F1F',
   },
   errorText: {
     maxWidth: 272,

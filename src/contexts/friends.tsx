@@ -18,6 +18,10 @@ type FriendsContextValue = {
   reload: () => Promise<void>;
 };
 
+function isSameIdList(a: string[], b: string[]) {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 const FriendsContext = createContext<FriendsContextValue | null>(null);
 
 export function FriendsProvider({ children }: PropsWithChildren) {
@@ -44,12 +48,16 @@ export function FriendsProvider({ children }: PropsWithChildren) {
       setCurrentUser(user);
       setCurrentUserId(user.id);
       setFriends(nextFriends);
-      setFeedUserIds(
-        buildFeedUserIds(
+      // 내용이 그대로면 이전 배열을 그대로 둔다. 새 배열을 만들어 넣으면 참조가
+      // 달라져서, 이 값을 의존성으로 쓰는 화면들이 매번 다시 조회한다.
+      setFeedUserIds((previous) => {
+        const next = buildFeedUserIds(
           user.id,
           nextFriends.map((friend) => friend.id),
-        ),
-      );
+        );
+
+        return isSameIdList(previous, next) ? previous : next;
+      });
     } catch (error) {
       console.warn('[friends] Failed to load friends', error);
     } finally {

@@ -11,10 +11,18 @@ export type FeedComment = {
   replies?: FeedComment[];
 };
 
+/**
+ * 게시글 공개범위
+ * - public: 전체 공개 (본인 + 친구)
+ * - private: 비공개 (본인만)
+ */
+export type PostVisibility = 'public' | 'private';
+
 /** 피드 게시글 */
 export type FeedPost = {
   id: string;
   user_id: string;
+  visibility: PostVisibility;
   profile_image_url: string | null;
   username: string;
   /** 표시용 날짜 (예: 2026.04.26) — username 오른쪽 */

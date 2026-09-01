@@ -34,6 +34,11 @@ yarn-error.*
 .env
 .env*.local
 
+# Firebase 서비스 계정 키 (FCM V1 발송 권한). google-services.json 과 달리 진짜 비밀이라
+# 절대 커밋하면 안 된다 — 유출되면 이 프로젝트로 누구나 푸시를 보낼 수 있다.
+*-firebase-adminsdk-*.json
+google-service-account*.json
+
 # typescript
 *.tsbuildinfo
 

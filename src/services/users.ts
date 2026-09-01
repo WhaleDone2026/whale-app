@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 import type { ImageSourcePropType } from 'react-native';
 
+import { DEFAULT_WHALE_ID } from '@/constants/whales';
 import { supabase } from '@/src/lib/supabase';
 
 const DEFAULT_PROFILE_IMAGE = require('../../assets/icons/test.png') as ImageSourcePropType;
@@ -14,6 +15,7 @@ type UserRow = {
   description: string | null;
   installed_at: string;
   intimacy_level: number;
+  whale_id: number | null;
 };
 
 type UserStats = {
@@ -31,6 +33,8 @@ export type AppUser = {
   description: string;
   installed_at: string;
   intimacy_level: number;
+  /** 고른 고래 종류. 친구 화면에서 이 사람을 나타내는 캐릭터로 쓴다 */
+  whale_id: number;
   friends_count: number;
   like_count: number;
   post_count: number;
@@ -77,6 +81,7 @@ function toAppUser(row: UserRow, stats?: UserStats): AppUser {
     description: row.description ?? '',
     installed_at: row.installed_at,
     intimacy_level: row.intimacy_level,
+    whale_id: row.whale_id ?? DEFAULT_WHALE_ID,
     friends_count: 0,
     like_count: stats?.likeCount ?? 0,
     post_count: stats?.postCount ?? 0,
@@ -138,7 +143,7 @@ async function fetchUserStats(userId: string): Promise<UserStats | null> {
 export async function fetchUserById(userId: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, tag, profile_image_url, cover_image_url, description, installed_at, intimacy_level')
+    .select('id, name, tag, profile_image_url, cover_image_url, description, installed_at, intimacy_level, whale_id')
     .eq('id', userId)
     .maybeSingle<UserRow>();
 
@@ -246,12 +251,17 @@ export async function saveProfileImage(userId: string, localUri: string): Promis
   return url;
 }
 
-/** 선택한 캐릭터(친밀도 단계)를 profiles.intimacy_level 에 저장한다. */
-export async function updateSelectedCharacterLevel(userId: string, level: number): Promise<void> {
+/**
+ * 고른 고래를 profiles.whale_id 에 저장한다.
+ *
+ * 예전에는 intimacy_level 에 넣었다. 친밀도는 함께한 날수로 오르는 값이라 고래를 바꿀
+ * 때마다 단계가 같이 흔들렸다.
+ */
+export async function updateSelectedWhaleId(userId: string, whaleId: number): Promise<void> {
   const { error } = await supabase
     .from('profiles')
     .update({
-      intimacy_level: level,
+      whale_id: whaleId,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
@@ -283,7 +293,7 @@ export async function saveCoverImage(userId: string, localUri: string): Promise<
 export async function fetchUserByTag(tag: string): Promise<AppUser | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, tag, profile_image_url, cover_image_url, description, installed_at, intimacy_level')
+    .select('id, name, tag, profile_image_url, cover_image_url, description, installed_at, intimacy_level, whale_id')
     .eq('tag', tag)
     .maybeSingle<UserRow>();
 

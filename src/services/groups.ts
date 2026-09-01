@@ -12,6 +12,7 @@ type GroupMemberRow = {
     description: string | null;
     installed_at: string;
     intimacy_level: number;
+    whale_id: number | null;
   } | null;
 };
 
@@ -90,7 +91,8 @@ export async function fetchGroupsWithMembersForUser(userId: string): Promise<Gro
           profile_image_url,
           description,
           installed_at,
-          intimacy_level
+          intimacy_level,
+          whale_id
         )
       )
     `,
@@ -128,7 +130,8 @@ export async function fetchGroupsWithMembers(): Promise<GroupWithMembers[]> {
           profile_image_url,
           description,
           installed_at,
-          intimacy_level
+          intimacy_level,
+          whale_id
         )
       )
     `,

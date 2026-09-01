@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
@@ -18,8 +19,11 @@ import {
   primary,
   white,
 } from '@/constants/theme';
+import { useCurrentUserId } from '@/hooks/use-current-user-id';
+import { fetchDiaryCategories } from '@/src/services/diary';
 
-const CATEGORIES = ['전체', '사회생활', '친구', '공부'];
+/** 카테고리를 고르지 않은 상태. 저장 시 null 로 들어가 '전체'에만 묶인다. */
+const NO_CATEGORY = '전체';
 const CATEGORY_SELECTED_BG = '#D4F1FF';
 const ITEM_HEIGHT = 31;
 
@@ -29,9 +33,23 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSubmit: (category: string, visibility: Visibility) => void;
+  /** 등록 처리 중 — 버튼을 잠가 중복 등록을 막는다 */
+  isSubmitting?: boolean;
+  /** 수정 화면에서 기존 값을 채워 넣을 때 사용 */
+  initialCategory?: string | null;
+  initialVisibility?: Visibility;
+  submitLabel?: string;
 };
 
-export function PostSettingsBottomSheet({ visible, onClose, onSubmit }: Props) {
+export function PostSettingsBottomSheet({
+  visible,
+  onClose,
+  onSubmit,
+  isSubmitting = false,
+  initialCategory = null,
+  initialVisibility = 'public',
+  submitLabel = '등록하기',
+}: Props) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(600)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -41,6 +59,48 @@ export function PostSettingsBottomSheet({ visible, onClose, onSubmit }: Props) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDropdownMounted, setIsDropdownMounted] = useState(false);
   const dropdownAnim = useRef(new Animated.Value(0)).current;
+
+  const currentUserId = useCurrentUserId();
+  const [myCategories, setMyCategories] = useState<string[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+
+  // 내가 만든 카테고리(diary_categories)를 시트가 열릴 때마다 새로 받아온다.
+  // 보관함에서 카테고리를 추가하고 바로 글을 쓰는 흐름을 지원해야 한다.
+  useEffect(() => {
+    if (!visible || !currentUserId) {
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingCategories(true);
+
+    fetchDiaryCategories(currentUserId)
+      .then((titles) => {
+        if (isMounted) {
+          setMyCategories(titles);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCategories(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [visible, currentUserId]);
+
+  // 수정 중인 글의 카테고리가 목록에서 사라졌더라도 선택지에는 남겨 둔다.
+  // (그렇지 않으면 저장할 때 조용히 다른 값으로 바뀐다)
+  const categoryOptions = useMemo(() => {
+    const existing = initialCategory?.trim();
+    const titles = existing && !myCategories.includes(existing)
+      ? [...myCategories, existing]
+      : myCategories;
+
+    return [NO_CATEGORY, ...titles.filter((title) => title !== NO_CATEGORY)];
+  }, [initialCategory, myCategories]);
 
   const openDropdown = () => {
     setIsDropdownMounted(true);
@@ -67,6 +127,10 @@ export function PostSettingsBottomSheet({ visible, onClose, onSubmit }: Props) {
 
   useEffect(() => {
     if (visible) {
+      // 열릴 때마다 기존 값으로 맞춘다. 수정 화면에서 저장된 설정이 보여야 한다.
+      // (카테고리 없음 = '전체')
+      setSelectedCategory(initialCategory?.trim() || NO_CATEGORY);
+      setVisibility(initialVisibility);
       setIsModalVisible(true);
       Animated.parallel([
         Animated.spring(slideAnim, {
@@ -141,7 +205,12 @@ export function PostSettingsBottomSheet({ visible, onClose, onSubmit }: Props) {
                 </Pressable>
                 {isDropdownMounted && (
                   <Animated.View style={[styles.dropdownList, { opacity: dropdownAnim }]}>
-                    {CATEGORIES.map((cat) => (
+                    {isLoadingCategories && myCategories.length === 0 ? (
+                      <View style={styles.dropdownItem}>
+                        <ActivityIndicator size="small" color={primary} />
+                      </View>
+                    ) : null}
+                    {categoryOptions.map((cat) => (
                       <Pressable
                         key={cat}
                         style={[
@@ -175,9 +244,17 @@ export function PostSettingsBottomSheet({ visible, onClose, onSubmit }: Props) {
 
           {/* 등록하기 버튼 */}
           <Pressable
-            style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]}
+            style={({ pressed }) => [
+              styles.submitButton,
+              (pressed || isSubmitting) && styles.submitButtonPressed,
+            ]}
+            disabled={isSubmitting}
             onPress={() => onSubmit(selectedCategory, visibility)}>
-            <Text style={styles.submitText}>등록하기</Text>
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={white} />
+            ) : (
+              <Text style={styles.submitText}>{submitLabel}</Text>
+            )}
           </Pressable>
         </Animated.View>
       </View>
