@@ -4,7 +4,7 @@
     "slug": "whale-app",
     "version": "1.0.3",
     "orientation": "portrait",
-    "icon": "./assets/icons/whale1.png",
+    "icon": "./assets/icons/whaleapp_icon.png",
     "scheme": "whaleapp",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -22,8 +22,8 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/icons/whale1.png",
-        "monochromeImage": "./assets/icons/whale1.png"
+        "foregroundImage": "./assets/icons/whaleapp.png",
+        "monochromeImage": "./assets/icons/whaleapp.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -45,7 +45,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/icons/whaleapp.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
