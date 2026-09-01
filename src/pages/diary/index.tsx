@@ -24,7 +24,8 @@ import { background, darkGray, FontFamily, FontSize, gray, lightGray, primary, r
 import {
   createDiaryCategory,
   deleteDiaryCategory,
-  fetchDiaryArchiveByUserId,
+  fetchDiaryCategoriesWithStatsByUserId,
+  fetchDiaryEntriesByUserId,
   updateDiaryCategory,
   type DiaryCategory,
   type DiaryEntry,
@@ -146,40 +147,63 @@ export default function DiaryPage() {
   // 깜빡이므로, 다시 받아온 결과로 통째로 교체한다.
   useEffect(() => {
     setDiaryEntries([]);
-    setDiaryCategories([]);
     setFailedDiaryImages({});
     setLoadedDiaryImages({});
-    setFailedCategoryImages({});
   }, [selectedMonth, selectedYear]);
 
+  // 카테고리는 전체 기간 기준이라 월을 바꿀 때는 다시 요청하지 않는다. 화면에
+  // 돌아오거나 카테고리를 바꾼 경우(reloadKey)에만 최신 목록·게시물 수를 받는다.
   useEffect(() => {
     let isMounted = true;
 
     fetchCurrentUser()
       .then((user) => {
         if (!isMounted || !user) {
-          return null;
-        }
-
-        setUserId(user.id);
-        return fetchDiaryArchiveByUserId(user.id, selectedYear, selectedMonth);
-      })
-      .then((archive) => {
-        if (!isMounted || !archive) {
           return;
         }
 
-        setDiaryEntries(archive.entries);
-        setDiaryCategories(archive.categories);
+        setUserId(user.id);
+        return fetchDiaryCategoriesWithStatsByUserId(user.id);
+      })
+      .then((categories) => {
+        if (!isMounted || !categories) {
+          return;
+        }
+
+        setFailedCategoryImages({});
+        setDiaryCategories(categories);
       })
       .catch((error) => {
-        console.warn('[diary] Failed to load archive', error);
+        console.warn('[diary] Failed to load categories', error);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [selectedMonth, selectedYear, reloadKey]);
+  }, [reloadKey]);
+
+  // 달력 칸은 선택한 월에 맞춰 별도로 갱신한다.
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    let isMounted = true;
+
+    fetchDiaryEntriesByUserId(userId, selectedYear, selectedMonth)
+      .then((entries) => {
+        if (isMounted) {
+          setDiaryEntries(entries);
+        }
+      })
+      .catch((error) => {
+        console.warn('[diary] Failed to load calendar entries', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, selectedMonth, selectedYear, reloadKey]);
 
   const closeCategoryModal = () => {
     setIsCategoryModalOpen(false);

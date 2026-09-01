@@ -112,18 +112,12 @@ async function fetchDiaryPosts(
   return data;
 }
 
-/**
- * 캘린더는 선택한 달만, 카테고리(폴더)는 전체 기간을 기준으로 만든다.
- * 8월 캘린더를 보고 있어도 카테고리는 여태 쓴 글 전부를 세고 대표 사진도 그중에서 고른다.
- */
-export async function fetchDiaryArchiveByUserId(userId: string, year: number, month: number): Promise<DiaryArchive> {
-  const [monthPosts, allPosts] = await Promise.all([
-    fetchDiaryPosts(userId, getMonthRange(year, month)),
-    fetchDiaryPosts(userId),
-  ]);
+/** 선택한 달의 캘린더 칸에 표시할 일기만 가져온다. */
+export async function fetchDiaryEntriesByUserId(userId: string, year: number, month: number): Promise<DiaryEntry[]> {
+  const monthPosts = await fetchDiaryPosts(userId, getMonthRange(year, month));
 
-  if (!monthPosts || !allPosts) {
-    return EMPTY_ARCHIVE;
+  if (!monthPosts) {
+    return [];
   }
 
   const entriesByDay = new Map<number, DiaryEntry>();
@@ -144,7 +138,20 @@ export async function fetchDiaryArchiveByUserId(userId: string, year: number, mo
     }
   });
 
-  const entries = [...entriesByDay.values()];
+  return [...entriesByDay.values()];
+}
+
+/**
+ * 카테고리(폴더)는 전체 기간을 기준으로 만든다. 월을 넘길 때마다 다시 요청하지 않는다.
+ * 8월 캘린더를 보고 있어도 카테고리는 여태 쓴 글 전부를 세고 대표 사진도 그중에서 고른다.
+ */
+export async function fetchDiaryCategoriesWithStatsByUserId(userId: string): Promise<DiaryCategory[]> {
+  const allPosts = await fetchDiaryPosts(userId);
+
+  if (!allPosts) {
+    return [];
+  }
+
   const categoriesByName = new Map<string, DiaryCategory>();
 
   // 전체 폴더가 쓸 대표 이미지 — 가장 최근에 올린 사진.
@@ -195,18 +202,25 @@ export async function fetchDiaryArchiveByUserId(userId: string, year: number, mo
     });
   });
 
-  return {
-    entries,
-    categories: [
-      {
-        id: 'all',
-        title: '전체',
-        postCount: allPosts.length,
-        image: latestPostImage,
-      },
-      ...categoriesByName.values(),
-    ],
-  };
+  return [
+    {
+      id: 'all',
+      title: '전체',
+      postCount: allPosts.length,
+      image: latestPostImage,
+    },
+    ...categoriesByName.values(),
+  ];
+}
+
+/** 이전 호출부를 위한 월별 일기 + 전체 카테고리 조합 조회. */
+export async function fetchDiaryArchiveByUserId(userId: string, year: number, month: number): Promise<DiaryArchive> {
+  const [entries, categories] = await Promise.all([
+    fetchDiaryEntriesByUserId(userId, year, month),
+    fetchDiaryCategoriesWithStatsByUserId(userId),
+  ]);
+
+  return { entries, categories };
 }
 
 /**
