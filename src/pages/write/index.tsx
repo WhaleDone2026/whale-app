@@ -396,7 +396,6 @@ export default function WritePage() {
                 <AIIcon width={34} height={20} fill={primary} />
               </Pressable>
             </View>
-            <ThemedButton label="저장" variant="ghost" />
           </View>
         </ThemedView>
       </KeyboardAvoidingView>
