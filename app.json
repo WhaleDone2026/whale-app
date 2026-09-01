@@ -27,7 +27,6 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
-      
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -37,7 +36,7 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.0.21" 
+            "kotlinVersion": "2.0.21"
           }
         }
       ],
@@ -85,11 +84,14 @@
           "photosPermission": "사진 업로드를 위해 사진첩 접근 권한이 필요합니다.",
           "savePhotosPermission": "촬영한 사진을 저장하기 위해 사진첩 접근 권한이 필요합니다.",
           "isAccessMediaLocationEnabled": false,
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       "expo-apple-authentication",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
