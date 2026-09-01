@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -352,13 +353,12 @@ export default function WritePage() {
           <View style={styles.divider} />
 
           {/* 사진 그리드 + 텍스트 입력 영역 */}
-          <View style={styles.contentArea}>
-            {isLoadingPost && (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="small" color={primary} />
-              </View>
-            )}
-            {images.length > 0 && (
+          <ScrollView
+            style={styles.contentArea}
+            contentContainerStyle={styles.contentContainer}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}>
+            {selectedImages.length > 0 && (
               <View style={styles.gridWrapper}>
                 <ImageGrid uris={images.map((image) => image.uri)} onRemove={removeImage} />
               </View>
@@ -376,7 +376,7 @@ export default function WritePage() {
               selection={selection}
               onSelectionChange={e => setSelection(e.nativeEvent.selection)}
             />
-          </View>
+          </ScrollView>
 
           <View style={styles.divider} />
 
@@ -466,18 +466,15 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    zIndex: 1,
+  contentContainer: {
+    flexGrow: 1,
   },
   gridWrapper: {
     paddingHorizontal: 20,
   },
   input: {
-    flex: 1,
+    flexGrow: 1,
+    minHeight: 180,
     paddingHorizontal: 20,
     paddingTop: 10,
     fontSize: FontSize.base,

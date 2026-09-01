@@ -80,23 +80,15 @@
         {
           "photosPermission": "사진 업로드를 위해 사진첩 접근 권한이 필요합니다.",
           "savePhotosPermission": "촬영한 사진을 저장하기 위해 사진첩 접근 권한이 필요합니다.",
-          "isAccessMediaLocationEnabled": false
+          "isAccessMediaLocationEnabled": false,
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       "expo-apple-authentication",
       "expo-secure-store",
-      [
-        "expo-notifications",
-        {
-          "color": "#3A8DFF"
-        }
-      ],
-      [
-        "@react-native-google-signin/google-signin",
-        {
-          "iosUrlScheme": "com.googleusercontent.apps.634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u"
-        }
-      ]
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
