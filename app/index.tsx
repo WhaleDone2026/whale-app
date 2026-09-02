@@ -1,5 +1,5 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
@@ -60,6 +60,7 @@ if (GOOGLE_WEB_CLIENT_ID) {
 }
 
 export default function RootIndex() {
+  const rootNavigationState = useRootNavigationState();
   const { width } = useWindowDimensions();
   const backgroundHeight = width * (1024 / 780);
   // 어떤 버튼을 눌렀는지 기억해 둔다. 단순 boolean 이면 세 버튼이 한꺼번에
@@ -70,6 +71,12 @@ export default function RootIndex() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Expo Router의 root navigator가 준비되기 전 replace를 보내면 액션이 유실되어
+    // "Do you have a route named onboarding?" 오류가 난다.
+    if (!rootNavigationState?.key) {
+      return;
+    }
+
     let isMounted = true;
 
     confirmAuthenticatedUser()
@@ -93,7 +100,7 @@ export default function RootIndex() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [rootNavigationState?.key]);
 
   const navigateAfterLogin = (route: PostLoginRoute) => {
     if (route.destination === 'home') {
@@ -101,10 +108,9 @@ export default function RootIndex() {
       return;
     }
 
-    router.replace({
-      pathname: route.step === 'profile' ? '/onboarding/profile' : '/onboarding/terms',
-      params: route.params,
-    });
+    // 프로필 화면은 진입 시 현재 세션에서 seed를 다시 읽으므로 params 없이도 된다.
+    // 문자열 절대 경로로 보내면 탭 navigator가 이 replace 액션을 가로채지 않는다.
+    router.replace(route.step === 'profile' ? '/onboarding/profile' : '/onboarding/terms');
   };
 
   const handleKakaoLogin = async () => {

@@ -27,6 +27,7 @@ import {
   white,
 } from "@/constants/theme";
 import { fetchAccountEmail, submitInquiry } from "@/src/services/inquiries";
+import { deleteCurrentAccount } from "@/src/services/account-deletion";
 import { signOutUser } from "@/src/services/onboarding";
 import type { TermType } from "@/src/services/terms";
 import { fetchCurrentUser, type AppUser } from "@/src/services/users";
@@ -102,6 +103,7 @@ export default function SettingsPage() {
     "logout" | "withdraw" | null
   >(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [isInquiryOpen, setIsInquiryOpen] = useState(false);
   const [isSendingInquiry, setIsSendingInquiry] = useState(false);
   /** 문의 폼의 이메일 기본값. 소셜 로그인이면 계정 이메일이 없을 수 있다. */
@@ -193,6 +195,29 @@ export default function SettingsPage() {
       Alert.alert("로그아웃하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsSigningOut(false);
+    }
+  };
+
+  const handleWithdrawal = async () => {
+    if (isWithdrawing) {
+      return;
+    }
+
+    setIsWithdrawing(true);
+
+    try {
+      // Edge Function이 재인증·소셜 연결 해제·스토리지/DB/auth.users 삭제를 순서대로 처리한다.
+      await deleteCurrentAccount();
+      setConfirmAction(null);
+      router.replace("/");
+    } catch (error) {
+      console.warn("[settings] Failed to delete account", error);
+      Alert.alert(
+        "회원탈퇴를 완료하지 못했습니다.",
+        error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -330,17 +355,16 @@ export default function SettingsPage() {
         onCancel={() => setConfirmAction(null)}
       />
 
-      {/* 탈퇴 처리 API가 아직 없어서 확인까지만 받고 안내를 띄운다 */}
       <ConfirmModal
         visible={confirmAction === "withdraw"}
         title="정말 탈퇴하시겠습니까?"
-        message="탈퇴하면 작성한 글과 친구 관계가 모두 사라지고 되돌릴 수 없어요."
+        message="계정을 다시 확인한 뒤 모든 글, 사진, 댓글, 친구 관계가 즉시 영구 삭제됩니다. 삭제 후에는 복구할 수 없어요."
         confirmLabel="탈퇴"
         image={cryingWhaleImage}
         destructive
+        isPending={isWithdrawing}
         onConfirm={() => {
-          setConfirmAction(null);
-          showComingSoon("회원탈퇴");
+          void handleWithdrawal();
         }}
         onCancel={() => setConfirmAction(null)}
       />

@@ -410,9 +410,11 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
     profileNameValue && profileNameValue !== createPendingName(userId) ? profileNameValue : null;
   const hasProfile = Boolean(profile);
   const hasTermsAgreement = Boolean(terms?.service_terms_agreed && terms?.privacy_policy_agreed);
+  // 가입 완료 시점 컬럼은 온보딩 도입 전의 기존 계정에는 비어 있을 수 있다. 계정별
+  // 온보딩 여부는 설치 이력이나 timestamp가 아니라, 실제 프로필과 필수 약관 상태로 판단한다.
+  // 신규 계정의 stub profile은 tmp 태그라 여기서 자연스럽게 미완료로 분류된다.
   const isComplete = Boolean(
-    profile?.onboarding_completed_at &&
-      profile.name?.trim() &&
+    profile?.name?.trim() &&
       profile.tag?.trim() &&
       !isPlaceholderTag(profile.tag) &&
       hasTermsAgreement,

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { background, darkGray, FontFamily, gray, white } from '@/constants/theme';
@@ -9,15 +9,16 @@ import {
   confirmAuthenticatedUser,
   getAuthUserMetadata,
   saveUserTermsAgreement,
+  signOutUser,
 } from '@/src/services/onboarding';
 
 type TermId = 'service' | 'privacy' | 'marketing' | 'aiTraining';
 
-const terms: Array<{
+const terms: {
   id: TermId;
   label: string;
   required: boolean;
-}> = [
+}[] = [
   { id: 'service', label: '서비스 이용약관', required: true },
   { id: 'privacy', label: '개인정보 처리방침', required: true },
   { id: 'marketing', label: '마케팅 정보 수신', required: false },
@@ -33,6 +34,7 @@ export default function OnboardingTermsPage() {
     aiTraining: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const isAllChecked = useMemo(() => terms.every((term) => checkedTerms[term.id]), [checkedTerms]);
@@ -100,6 +102,35 @@ export default function OnboardingTermsPage() {
     }
   };
 
+  // 로그인은 완료됐지만 가입을 취소한 상태다. 단순 back이면 로그인 세션이 남아 탭
+  // 초기 화면(피드)으로 빠지므로, 세션을 끝낸 뒤 로그인 첫 화면으로 명시적으로 보낸다.
+  const handleCancelOnboarding = useCallback(async () => {
+    if (isSubmitting || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setSubmitError(null);
+
+    try {
+      await signOutUser();
+      router.replace('/');
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : '로그아웃하지 못했습니다. 다시 시도해 주세요.');
+      setIsCancelling(false);
+    }
+  }, [isCancelling, isSubmitting]);
+
+  // Android 시스템 뒤로가기 역시 헤더 화살표와 같은 "가입 취소 → 로그인" 동작으로 맞춘다.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      void handleCancelOnboarding();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [handleCancelOnboarding]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
@@ -107,7 +138,10 @@ export default function OnboardingTermsPage() {
           accessibilityRole="button"
           accessibilityLabel="뒤로가기"
           hitSlop={10}
-          onPress={() => router.back()}
+          disabled={isSubmitting || isCancelling}
+          onPress={() => {
+            void handleCancelOnboarding();
+          }}
           style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
           <Ionicons name="chevron-back" size={25} color={darkGray} />
         </Pressable>

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePostHog } from 'posthog-react-native';
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -53,6 +54,20 @@ export default function OnboardingProfilePage() {
   const [tagStatus, setTagStatus] = useState<DuplicateStatus>('idle');
   const [isPickerVisible, setIsPickerVisible] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const goBackToTerms = useCallback(() => {
+    router.replace('/onboarding/terms');
+  }, []);
+
+  // 프로필 단계의 Android 시스템 뒤로가기도 탭/앱 종료가 아니라 약관 단계로 보낸다.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBackToTerms();
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [goBackToTerms]);
 
   useEffect(() => {
     let isMounted = true;
@@ -181,7 +196,9 @@ export default function OnboardingProfilePage() {
               accessibilityRole="button"
               accessibilityLabel="뒤로가기"
               hitSlop={10}
-              onPress={() => router.back()}
+              // 약관까지는 이미 저장된 상태이므로, 피드나 로그인 화면이 아니라 이전
+              // 온보딩 단계로만 돌아간다.
+              onPress={goBackToTerms}
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
               <Ionicons name="chevron-back" size={25} color={darkGray} />
             </Pressable>
