@@ -181,21 +181,33 @@ async function deleteRows(supabase: ReturnType<typeof createClient>, table: stri
 
 async function deleteAppData(supabase: ReturnType<typeof createClient>, userId: string): Promise<void> {
   await Promise.all([removeStorageFolder(supabase, 'posts', userId), removeStorageFolder(supabase, 'profiles', userId)]);
-  // user_id FK가 없는 보조 테이블은 profiles CASCADE 대상이 아니므로 먼저 지운다.
-  for (const [table, column] of [
-    ['diary_categories', 'user_id'],
-    ['user_notification_settings', 'user_id'],
-    ['user_push_tokens', 'user_id'],
-  ]) await deleteRows(supabase, table, column, userId);
-
-  // 실제 DB 스키마에서 profiles를 참조하는 활동 테이블은 모두 ON DELETE CASCADE다.
-  // 따라서 프로필 하나를 삭제하면 posts → post_images/comments/likes, 친구 관계,
-  // blocks/reports, notifications, AI 피드백, 문의와 약관 동의가 DB CASCADE로 함께 삭제된다.
-  const { error } = await supabase.from('profiles').delete().eq('id', userId);
-  if (error) {
-    console.error('[delete-account] profile deletion failed', error);
-    throw new Error(`프로필과 연결 데이터 삭제에 실패했습니다. (${error.code ?? 'unknown'})`);
+  // 내 글에 다른 사용자가 남긴 댓글/좋아요도 글과 함께 없애야 FK가 남지 않는다.
+  const { data: posts, error: postsError } = await supabase.from('posts').select('id').eq('user_id', userId);
+  if (postsError && postsError.code !== '42P01') throw new Error('게시글 목록을 읽지 못했습니다.');
+  const postIds = (posts ?? []).map((post: { id: string }) => post.id);
+  if (postIds.length) {
+    const { data: comments, error: commentsError } = await supabase.from('comments').select('id').in('post_id', postIds);
+    if (commentsError && commentsError.code !== '42P01') throw new Error('댓글 목록을 읽지 못했습니다.');
+    const commentIds = (comments ?? []).map((comment: { id: string }) => comment.id);
+    if (commentIds.length) {
+      const { error } = await supabase.from('comment_likes').delete().in('comment_id', commentIds);
+      if (error && error.code !== '42P01') throw new Error('댓글 좋아요 삭제에 실패했습니다.');
+    }
+    for (const table of ['comments', 'post_likes', 'post_images']) {
+      const { error } = await supabase.from(table).delete().in('post_id', postIds);
+      if (error && error.code !== '42P01') throw new Error(`${table} 데이터 삭제에 실패했습니다.`);
+    }
   }
+  // 참조하는 행부터 지운다. 새 개인 데이터 테이블을 만들면 이 목록에도 반드시 추가한다.
+  for (const [table, column] of [
+    ['notifications', 'actor_user_id'], ['notifications', 'recipient_user_id'],
+    ['reports', 'reporter_id'], ['blocks', 'blocker_id'], ['blocks', 'blocked_id'],
+    ['friend_requests', 'requester_id'], ['friend_requests', 'addressee_id'],
+    ['comment_likes', 'user_id'], ['post_likes', 'user_id'], ['comments', 'user_id'],
+    ['posts', 'user_id'], ['diary_categories', 'user_id'], ['user_terms_agreements', 'user_id'],
+    ['user_notification_settings', 'user_id'], ['user_push_tokens', 'user_id'],
+    ['ai_feedback', 'user_id'], ['inquiries', 'user_id'], ['group_members', 'user_id'],
+  ]) await deleteRows(supabase, table, column, userId);
 }
 
 Deno.serve(async (req) => {
@@ -225,18 +237,7 @@ Deno.serve(async (req) => {
       verifiedProviderId = await verifyGoogle(body.idToken, audience);
       if (verifiedProviderId !== expectedProviderId) throw new Error('현재 계정과 다른 Google 계정입니다.');
       const response = await fetch('https://oauth2.googleapis.com/revoke', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: body.accessToken }) });
-      if (!response.ok) {
-        const responseBody = await response.text();
-        // 이미 해제한 연결을 다시 revoke하면 Google은 invalid_token(400)을 준다.
-        // 이 경우 외부 연결은 이미 없는 상태이므로 계정 데이터 삭제를 계속한다.
-        if (response.status !== 400 || !responseBody.includes('invalid_token')) {
-          console.error('[delete-account] Google revoke failed', {
-            status: response.status,
-            body: responseBody,
-          });
-          throw new Error(`Google 연결 해제에 실패했습니다. (${response.status})`);
-        }
-      }
+      if (!response.ok) throw new Error('Google 연결 해제에 실패했습니다.');
     } else if (provider === 'kakao') {
       verifiedProviderId = await verifyKakao(body.accessToken);
       if (verifiedProviderId !== expectedProviderId) throw new Error('현재 계정과 다른 카카오 계정입니다.');
