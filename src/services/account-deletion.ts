@@ -1,7 +1,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import { login } from '@react-native-seoul/kakao-login';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import { supabase } from '@/src/lib/supabase';
@@ -61,6 +61,20 @@ async function getFunctionErrorMessage(error: unknown): Promise<string> {
 async function getReauthenticationPayload(provider: DeletionProvider): Promise<DeleteAccountPayload> {
   switch (provider) {
     case 'google': {
+      // Google이 여는 시스템 계정 선택 시트의 고정 문구는 앱에서 바꿀 수 없다.
+      // 직전에 목적을 분명히 안내해 다른 계정을 고르는 실수를 막는다.
+      await new Promise<void>((resolve, reject) => {
+        Alert.alert(
+          '탈퇴할 Google 계정을 선택하세요',
+          '현재 탈퇴하려는 계정과 같은 Google 계정을 선택해 주세요.',
+          [
+            { text: '취소', style: 'cancel', onPress: () => reject(new Error('Google 계정 재인증이 취소되었습니다.')) },
+            { text: '계정 선택하기', onPress: () => resolve() },
+          ],
+          { cancelable: true, onDismiss: () => reject(new Error('Google 계정 재인증이 취소되었습니다.')) },
+        );
+      });
+
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
       // 계정 선택을 다시 열어 사용자가 의도한 Google 계정으로 재인증하게 한다.
       await GoogleSignin.signOut().catch(() => undefined);

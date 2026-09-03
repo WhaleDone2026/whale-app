@@ -97,12 +97,9 @@ export default function OnboardingProfilePage() {
     };
   }, []);
 
-  const canComplete =
-    nickname.trim().length > 0 &&
-    tag.trim().length > 0 &&
-    nicknameStatus === 'available' &&
-    tagStatus === 'available' &&
-    !isSubmitting;
+  // 중복확인은 보조 기능이다. 완료 시 서버에서 이름·아이디의 중복을 다시 검사하므로,
+  // 사용자가 중복확인 버튼을 누르지 않아도 바로 완료를 시도할 수 있다.
+  const canComplete = !isSubmitting;
 
   const handleCheckDuplicate = async (field: 'name' | 'tag') => {
     const value = field === 'name' ? nickname.trim() : normalizeTag(tag);
@@ -174,7 +171,7 @@ export default function OnboardingProfilePage() {
       posthog.capture('onboarding_completed', {
         tone_preference: 'not_configured',
       });
-      router.replace('/home');
+      router.replace('/(tabs)/home/group');
     } catch (error) {
       const message = error instanceof Error ? error.message : '프로필 저장 중 문제가 발생했습니다.';
       setSubmitError(message);

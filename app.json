@@ -19,6 +19,7 @@
     "android": {
       "package": "com.whaledone.myapp",
       "versionCode": 2,
+      "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
@@ -41,6 +42,7 @@
         }
       ],
       "./plugins/withKakaoMaven",
+      "./plugins/withSingleTaskMainActivity",
       "expo-router",
       [
         "expo-splash-screen",

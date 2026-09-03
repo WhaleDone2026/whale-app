@@ -5,8 +5,10 @@ import {
   Animated,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -94,9 +96,6 @@ export function AIBottomSheet({
   const contentTranslateX = useRef(new Animated.Value(0)).current;
   const positiveButtonScale = useRef(new Animated.Value(1)).current;
   const negativeButtonScale = useRef(new Animated.Value(1)).current;
-  const keyboardShift = useRef(new Animated.Value(0)).current;
-  const feedbackInputRef = useRef<TextInput>(null);
-  const isFeedbackInputFocused = useRef(false);
   const isContentTransitioning = useRef(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [localContent, setLocalContent] = useState(content);
@@ -114,8 +113,6 @@ export function AIBottomSheet({
       setFeedbackComment('');
       contentOpacity.setValue(1);
       contentTranslateX.setValue(0);
-      keyboardShift.setValue(0);
-      isFeedbackInputFocused.current = false;
       isContentTransitioning.current = false;
       setIsModalVisible(true);
       Animated.parallel([
@@ -147,39 +144,7 @@ export function AIBottomSheet({
         if (finished) setIsModalVisible(false);
       });
     }
-  }, [content, contentOpacity, contentTranslateX, fadeAnim, keyboardShift, slideAnim, visible]);
-
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
-      if (!isFeedbackInputFocused.current) return;
-
-      requestAnimationFrame(() => {
-        feedbackInputRef.current?.measureInWindow((_x, y, _width, height) => {
-          const spacingAboveKeyboard = 12;
-          const overlap = y + height + spacingAboveKeyboard - event.endCoordinates.screenY;
-
-          Animated.timing(keyboardShift, {
-            toValue: -Math.max(overlap, 0),
-            duration: event.duration || 180,
-            useNativeDriver: true,
-          }).start();
-        });
-      });
-    });
-
-    const hideSubscription = Keyboard.addListener('keyboardDidHide', (event) => {
-      Animated.timing(keyboardShift, {
-        toValue: 0,
-        duration: event.duration || 180,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, [keyboardShift]);
+  }, [content, contentOpacity, contentTranslateX, fadeAnim, slideAnim, visible]);
 
   const transitionContent = (nextScreen: FeedbackScreen, direction: 1 | -1) => {
     if (isContentTransitioning.current || nextScreen === feedbackScreen) return;
@@ -271,8 +236,6 @@ export function AIBottomSheet({
 
   const feedbackReasons = feedbackScreen === 'positive' ? positiveReasons : negativeReasons;
   const canSubmitFeedback = selectedReasons.length > 0 || feedbackComment.trim().length > 0;
-  const sheetTranslateY = Animated.add(slideAnim, keyboardShift);
-
   return (
     <Modal
       transparent
@@ -281,7 +244,10 @@ export function AIBottomSheet({
       onRequestClose={() =>
         feedbackScreen === 'main' ? onClose() : transitionContent('main', -1)
       }>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={styles.overlay}>
         <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: fadeAnim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
@@ -289,7 +255,7 @@ export function AIBottomSheet({
         <Animated.View
           style={[
             styles.sheet,
-            { paddingBottom: insets.bottom + 20, transform: [{ translateY: sheetTranslateY }] },
+            { paddingBottom: insets.bottom + 20, transform: [{ translateY: slideAnim }] },
           ]}>
           <Animated.View
             needsOffscreenAlphaCompositing
@@ -472,7 +438,6 @@ export function AIBottomSheet({
                   </View>
 
                   <TextInput
-                    ref={feedbackInputRef}
                     style={styles.feedbackInput}
                     multiline
                     maxLength={400}
@@ -481,12 +446,6 @@ export function AIBottomSheet({
                     placeholderTextColor={gray}
                     value={feedbackComment}
                     onChangeText={setFeedbackComment}
-                    onFocus={() => {
-                      isFeedbackInputFocused.current = true;
-                    }}
-                    onBlur={() => {
-                      isFeedbackInputFocused.current = false;
-                    }}
                   />
 
                   <Pressable
@@ -514,7 +473,8 @@ export function AIBottomSheet({
             </Pressable>
           </Animated.View>
         </Animated.View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

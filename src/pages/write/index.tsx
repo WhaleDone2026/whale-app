@@ -2,7 +2,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePostHog } from 'posthog-react-native';
 import {
-  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
@@ -71,7 +70,6 @@ export default function WritePage() {
   // 수정 모드 — 피드에서 "수정"을 눌러 들어오면 postId 가 넘어온다.
   const { postId } = useLocalSearchParams<{ postId?: string }>();
   const [editingPost, setEditingPost] = useState<EditablePost | null>(null);
-  const [isLoadingPost, setIsLoadingPost] = useState(false);
   const isEditing = editingPost != null;
 
   // AI 버튼을 누른 시점의 원문과 초안 id 를 고정해 둔다. 시트 안에서 글을 고쳐도
@@ -133,8 +131,6 @@ export default function WritePage() {
     }
 
     let isMounted = true;
-    setIsLoadingPost(true);
-
     fetchPostForEdit(postId)
       .then((post) => {
         if (!isMounted) {
@@ -152,11 +148,6 @@ export default function WritePage() {
         }
         Alert.alert(error instanceof Error ? error.message : '게시글을 불러오지 못했습니다.');
         router.back();
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoadingPost(false);
-        }
       });
 
     return () => {
@@ -366,9 +357,9 @@ export default function WritePage() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
-        // 두 플랫폼 모두 하단 여백으로 키보드를 피한다. `height`처럼 화면 자체를
-        // 줄이지 않아, 키보드와 함께 숨었던 탭바가 돌아올 때 bottomBar가 겹치지 않는다.
-        behavior="padding">
+        // Android의 padding은 창 크기를 줄이지 않아 하단 입력 도구막대와 본문이
+        // 키보드 뒤로 겹친다. Android에서는 남은 높이만큼 화면을 줄여 준다.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ThemedView style={styles.container}>
           {/* Topbar */}
           <View style={styles.topBar}>
@@ -511,6 +502,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flexGrow: 1,
+    paddingBottom: 16,
   },
   gridWrapper: {
     paddingHorizontal: 20,

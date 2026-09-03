@@ -104,7 +104,8 @@ export default function RootIndex() {
 
   const navigateAfterLogin = (route: PostLoginRoute) => {
     if (route.destination === 'home') {
-      router.replace('/home');
+      // 칭찬고래의 첫 진입은 피드보다 친구 고래가 보이는 공간으로 연다.
+      router.replace('/(tabs)/home/group');
       return;
     }
 
