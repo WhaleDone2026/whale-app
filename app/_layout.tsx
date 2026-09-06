@@ -4,7 +4,7 @@ import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { PostHogProvider } from 'posthog-react-native';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -12,13 +12,16 @@ import { posthog } from '@/src/lib/posthog';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { supabase } from '@/src/lib/supabase';
 
-SplashScreen.preventAutoHideAsync();
+// 앱의 첫 렌더가 준비될 때까지 기본 스플래시가 먼저 사라지지 않게 한다.
+// 호출 자체가 실패해도 앱 시작을 막을 이유는 없다.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 console.log('=== LAYOUT LOADED ===')
 
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const hasHiddenSplash = useRef(false);
   const [loaded, fontError] = useFonts({
     'Pretendard-Thin': require('../assets/fonts/Pretendard-Thin.ttf'),
     'Pretendard-ExtraLight': require('../assets/fonts/Pretendard-ExtraLight.ttf'),
@@ -32,13 +35,29 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    const hideSplash = () => {
+      if (hasHiddenSplash.current) {
+        return;
+      }
+
+      hasHiddenSplash.current = true;
+      void SplashScreen.hideAsync().catch((error) => {
+        console.warn('[splash] failed to hide', error);
+      });
+    };
+
+    // 폰트 파일 I/O가 첫 실행에서 지연되더라도 네이티브 스플래시가 영구히 남으면 안 된다.
+    const fallbackTimer = setTimeout(hideSplash, 4_000);
+
     if (loaded || fontError) {
       if (fontError) {
         console.warn('[fonts]', fontError);
       }
-      SplashScreen.hideAsync();
+      hideSplash();
     }
-  }, [loaded, fontError]);
+
+    return () => clearTimeout(fallbackTimer);
+  }, [fontError, loaded]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

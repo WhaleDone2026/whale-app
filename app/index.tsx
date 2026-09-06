@@ -41,6 +41,25 @@ type KakaoLoginToken = {
   id_token?: string;
 };
 
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 6_000;
+
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+
+    Promise.resolve(promise).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 // Google Cloud Console 에서 만든 OAuth 클라이언트 ID. 비밀값이 아니라 앱에 그대로
 // 들어가는 값이고, client secret 은 Supabase 쪽에만 넣는다.
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -79,13 +98,28 @@ export default function RootIndex() {
 
     let isMounted = true;
 
-    confirmAuthenticatedUser()
-      .then(async (user) => {
+    // getUser()는 서버 검증 요청까지 기다린다. 시작 화면에서는 먼저 SecureStore의
+    // 로컬 세션을 복원해야 오프라인·느린 네트워크에서도 앱이 멈춘 것처럼 보이지 않는다.
+    withTimeout(supabase.auth.getSession(), SESSION_BOOTSTRAP_TIMEOUT_MS, '세션 복원 시간이 초과되었습니다.')
+      .then(async ({ data: { session }, error }) => {
         if (!isMounted) {
           return;
         }
 
-        const route = await getPostLoginRoute(user);
+        if (error || !session?.user) {
+          return;
+        }
+
+        const route = await withTimeout(
+          getPostLoginRoute(session.user),
+          SESSION_BOOTSTRAP_TIMEOUT_MS,
+          '로그인 상태 확인 시간이 초과되었습니다.',
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
         navigateAfterLogin(route);
       })
       .catch(() => {
