@@ -12,7 +12,8 @@
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_mgMnWK7daKV9S7VpxLrvdg_aTflGq9i",
         "EXPO_PUBLIC_AI_API_URL": "https://api.whale-done.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "634228636638-vdsfaoa1827gdjsmcn0nvc1fpr2uccf5.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "634228636638-9h5p8shrg662j56a5bm0l8p1pmb0l6pl.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -23,7 +24,8 @@
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_mgMnWK7daKV9S7VpxLrvdg_aTflGq9i",
         "EXPO_PUBLIC_AI_API_URL": "https://api.whale-done.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "634228636638-vdsfaoa1827gdjsmcn0nvc1fpr2uccf5.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "634228636638-9h5p8shrg662j56a5bm0l8p1pmb0l6pl.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -34,7 +36,8 @@
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_mgMnWK7daKV9S7VpxLrvdg_aTflGq9i",
         "EXPO_PUBLIC_AI_API_URL": "https://api.whale-done.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "634228636638-vdsfaoa1827gdjsmcn0nvc1fpr2uccf5.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "634228636638-67g2dsrpu7g4fqk0t6i5hdjlq91uie3u.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "634228636638-9h5p8shrg662j56a5bm0l8p1pmb0l6pl.apps.googleusercontent.com"
       }
     }
   },
