@@ -85,12 +85,18 @@ function createPendingName(userId: string) {
   return `user${userId.replace(/-/g, '').slice(0, 6)}`;
 }
 
-function isPlaceholderTag(tag: string | null | undefined) {
-  if (!tag?.trim()) {
-    return true;
-  }
+function isPlaceholderTag(tag: string | null | undefined, userId: string) {
+  // 실제 아이디가 tmp 또는 user_로 시작할 수 있다. 앱이 만든 정확한 임시값만
+  // 미완료 상태로 본다.
+  return tag?.trim() === createPendingTag(userId);
+}
 
-  return tag.startsWith('tmp') || tag.startsWith('user_');
+function isJwtIssuedAtFutureError(error: { code?: string } | null) {
+  return error?.code === 'PGRST303';
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function upsertProfileStub(
@@ -382,25 +388,38 @@ export function getAuthUserMetadata(user: User): AuthUserMetadata {
 }
 
 export async function getOnboardingStatus(userId: string): Promise<OnboardingStatus> {
-  const [profileResult, termsResult] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, name, tag, profile_image_url, onboarding_completed_at')
-      .eq('id', userId)
-      .maybeSingle<ProfileOnboardingRow>(),
-    supabase
-      .from('user_terms_agreements')
-      .select('user_id, service_terms_agreed, privacy_policy_agreed')
-      .eq('user_id', userId)
-      .maybeSingle<TermsAgreementRow>(),
-  ]);
+  const loadStatus = () =>
+    Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, name, tag, profile_image_url, onboarding_completed_at')
+        .eq('id', userId)
+        .maybeSingle<ProfileOnboardingRow>(),
+      supabase
+        .from('user_terms_agreements')
+        .select('user_id, service_terms_agreed, privacy_policy_agreed')
+        .eq('user_id', userId)
+        .maybeSingle<TermsAgreementRow>(),
+    ]);
 
-  if (profileResult.error) {
-    console.warn('[onboarding] Failed to load profile status', profileResult.error);
+  let [profileResult, termsResult] = await loadStatus();
+
+  // 새 JWT가 Auth와 Data API 사이의 짧은 시간 차이로 거절될 수 있다. 같은 토큰을
+  // 짧게 기다린 뒤 다시 시도하면 서버 시간이 따라잡는 경우가 있다.
+  if (isJwtIssuedAtFutureError(profileResult.error) || isJwtIssuedAtFutureError(termsResult.error)) {
+    await delay(300);
+    [profileResult, termsResult] = await loadStatus();
+
+    if (isJwtIssuedAtFutureError(profileResult.error) || isJwtIssuedAtFutureError(termsResult.error)) {
+      await delay(900);
+      [profileResult, termsResult] = await loadStatus();
+    }
   }
 
-  if (termsResult.error) {
-    console.warn('[onboarding] Failed to load terms status', termsResult.error);
+  if (profileResult.error || termsResult.error) {
+    const error = profileResult.error ?? termsResult.error;
+    console.warn('[onboarding] Failed to load onboarding status', error);
+    throw new Error(error?.message ?? '온보딩 상태를 불러오지 못했습니다.');
   }
 
   const profile = profileResult.data;
@@ -416,7 +435,7 @@ export async function getOnboardingStatus(userId: string): Promise<OnboardingSta
   const isComplete = Boolean(
     profile?.name?.trim() &&
       profile.tag?.trim() &&
-      !isPlaceholderTag(profile.tag) &&
+      !isPlaceholderTag(profile.tag, userId) &&
       hasTermsAgreement,
   );
 
