@@ -9,6 +9,9 @@
  *   GOOGLE_OAUTH_CLIENT_ID             Google web client ID
  *   APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY
  *                                     Apple .p8 private key (개행 포함 PEM)
+ *   POSTHOG_PERSONAL_API_KEY          PostHog personal API key (scope: person:write)
+ *   POSTHOG_PROJECT_ID                PostHog 프로젝트 ID (숫자)
+ *   POSTHOG_API_HOST                  선택. 기본값 https://us.posthog.com (수집용 us.i 가 아니다)
  *
  * 배포
  *   supabase functions deploy delete-account
@@ -210,6 +213,36 @@ async function deleteAppData(supabase: ReturnType<typeof createClient>, userId: 
   ]) await deleteRows(supabase, table, column, userId);
 }
 
+// 앱은 Supabase user id 를 PostHog distinct id 로 identify 한다(app/_layout.tsx).
+// 분석 데이터 삭제가 실패했다고 탈퇴를 막을 수는 없으므로 예외를 던지지 않고 로그만 남긴다.
+// 로그에 남은 user id 로 PostHog 대시보드에서 직접 삭제하면 된다.
+async function deletePostHogPerson(userId: string): Promise<void> {
+  const apiKey = Deno.env.get('POSTHOG_PERSONAL_API_KEY');
+  const projectId = Deno.env.get('POSTHOG_PROJECT_ID');
+  const host = Deno.env.get('POSTHOG_API_HOST') ?? 'https://us.posthog.com';
+  if (!apiKey || !projectId) {
+    console.error('[delete-account] PostHog secrets missing, manual deletion needed', { userId });
+    return;
+  }
+
+  try {
+    const response = await fetch(`${host}/api/projects/${projectId}/persons/bulk_delete/`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ distinct_ids: [userId], delete_events: true, delete_recordings: true }),
+    });
+    if (!response.ok) {
+      console.error('[delete-account] PostHog deletion failed, manual deletion needed', {
+        userId,
+        status: response.status,
+        body: (await response.text()).slice(0, 500),
+      });
+    }
+  } catch (error) {
+    console.error('[delete-account] PostHog deletion failed, manual deletion needed', { userId, error });
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
   const authorization = req.headers.get('Authorization');
@@ -254,6 +287,7 @@ Deno.serve(async (req) => {
     await deleteAppData(supabase, auth.user.id);
     const { error: deleteError } = await supabase.auth.admin.deleteUser(auth.user.id, true);
     if (deleteError) throw new Error('계정 삭제에 실패했습니다.');
+    await deletePostHogPerson(auth.user.id);
     return json(200, { deleted: true });
   } catch (error) {
     console.error('[delete-account]', error);
