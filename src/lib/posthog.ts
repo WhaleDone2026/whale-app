@@ -8,5 +8,3 @@ export const posthog = new PostHog(process.env.EXPO_PUBLIC_POSTHOG_KEY!, {
 if (__DEV__) {
   posthog.register({ is_test: true })
 }
-
-posthog.debug()   // 임시
