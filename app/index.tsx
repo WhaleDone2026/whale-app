@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GoogleIcon } from '@/components/icons/google-icon';
 import {FontFamily, gray} from "@/constants/theme";
 import { supabase } from '@/src/lib/supabase';
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import {
   confirmAuthenticatedUser,
   getPostLoginRoute,
@@ -42,6 +43,20 @@ type KakaoLoginToken = {
 };
 
 const SESSION_BOOTSTRAP_TIMEOUT_MS = 6_000;
+
+// 에러 원문을 그대로 띄우면 서버 장애 때 응답 헤더·쿠키까지 화면에 나온다.
+// 원문은 개발 중 로그로만 남기고, 화면에는 사용자용 문구만 보여 준다.
+function getLoginErrorMessage(error: unknown, fallback: string) {
+  if (__DEV__) {
+    console.warn('[login] failed', error);
+  }
+
+  if (isAuthRetryableFetchError(error)) {
+    return '서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+
+  return fallback;
+}
 
 function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -177,8 +192,7 @@ export default function RootIndex() {
       const route = await getPostLoginRoute(user);
       navigateAfterLogin(route);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '카카오 로그인 중 문제가 발생했습니다.';
-      setLoginError(message);
+      setLoginError(getLoginErrorMessage(error, '카카오 로그인 중 문제가 발생했어요. 다시 시도해 주세요.'));
     } finally {
       setPendingProvider(null);
     }
@@ -238,8 +252,7 @@ export default function RootIndex() {
         return;
       }
 
-      const message = error instanceof Error ? error.message : '구글 로그인 중 문제가 발생했습니다.';
-      setLoginError(message);
+      setLoginError(getLoginErrorMessage(error, '구글 로그인 중 문제가 발생했어요. 다시 시도해 주세요.'));
     } finally {
       setPendingProvider(null);
     }
@@ -294,8 +307,7 @@ export default function RootIndex() {
         return;
       }
 
-      const message = error instanceof Error ? error.message : 'Apple 로그인 중 문제가 발생했습니다.';
-      setLoginError(message);
+      setLoginError(getLoginErrorMessage(error, 'Apple 로그인 중 문제가 발생했어요. 다시 시도해 주세요.'));
     } finally {
       setPendingProvider(null);
     }
