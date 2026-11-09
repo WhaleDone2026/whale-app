@@ -12,22 +12,26 @@ import {
   signOutUser,
 } from '@/src/services/onboarding';
 
-type TermId = 'service' | 'privacy' | 'marketing' | 'aiTraining';
+type TermId = 'age' | 'service' | 'privacy' | 'marketing' | 'aiTraining';
 
+// 연령 확인은 볼 문서가 없는 확인 항목이라 '자세히 보기' 화살표를 두지 않는다.
 const terms: {
   id: TermId;
   label: string;
   required: boolean;
+  hasDetail: boolean;
 }[] = [
-  { id: 'service', label: '서비스 이용약관', required: true },
-  { id: 'privacy', label: '개인정보 처리방침', required: true },
-  { id: 'marketing', label: '마케팅 정보 수신', required: false },
-  { id: 'aiTraining', label: 'AI 모델 개선을 위한 데이터 활용', required: false },
+  { id: 'age', label: '만 14세 이상입니다', required: true, hasDetail: false },
+  { id: 'service', label: '서비스 이용약관', required: true, hasDetail: true },
+  { id: 'privacy', label: '개인정보 처리방침', required: true, hasDetail: true },
+  { id: 'marketing', label: '마케팅 정보 수신', required: false, hasDetail: true },
+  { id: 'aiTraining', label: 'AI 모델 개선을 위한 데이터 활용', required: false, hasDetail: true },
 ];
 
 export default function OnboardingTermsPage() {
   const params = useLocalSearchParams<{ nickname?: string; profileImage?: string }>();
   const [checkedTerms, setCheckedTerms] = useState<Record<TermId, boolean>>({
+    age: false,
     service: false,
     privacy: false,
     marketing: false,
@@ -38,12 +42,13 @@ export default function OnboardingTermsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const isAllChecked = useMemo(() => terms.every((term) => checkedTerms[term.id]), [checkedTerms]);
-  const canContinue = checkedTerms.service && checkedTerms.privacy;
+  const canContinue = checkedTerms.age && checkedTerms.service && checkedTerms.privacy;
 
   const toggleAll = () => {
     const nextValue = !isAllChecked;
 
     setCheckedTerms({
+      age: nextValue,
       service: nextValue,
       privacy: nextValue,
       marketing: nextValue,
@@ -75,6 +80,7 @@ export default function OnboardingTermsPage() {
       await saveUserTermsAgreement(
         user.id,
         {
+          ageOver14: checkedTerms.age,
           service: checkedTerms.service,
           privacy: checkedTerms.privacy,
           marketing: checkedTerms.marketing,
@@ -183,13 +189,17 @@ export default function OnboardingTermsPage() {
                   [{term.required ? '필수' : '선택'}] {term.label}
                 </Text>
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${term.label} 자세히 보기`}
-                hitSlop={10}
-                style={({ pressed }) => [styles.arrowButton, pressed && styles.pressed]}>
-                <Ionicons name="chevron-forward" size={25} color={gray} />
-              </Pressable>
+              {term.hasDetail ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${term.label} 자세히 보기`}
+                  hitSlop={10}
+                  style={({ pressed }) => [styles.arrowButton, pressed && styles.pressed]}>
+                  <Ionicons name="chevron-forward" size={25} color={gray} />
+                </Pressable>
+              ) : (
+                <View style={styles.arrowButton} />
+              )}
             </View>
           ))}
         </View>

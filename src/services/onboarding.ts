@@ -18,6 +18,7 @@ type TermsAgreementRow = {
 };
 
 export type TermsAgreementInput = {
+  ageOver14: boolean;
   service: boolean;
   privacy: boolean;
   marketing: boolean;
@@ -219,7 +220,7 @@ export async function saveUserTermsAgreement(
     profileImageUrl?: string;
   },
 ): Promise<void> {
-  if (!terms.service || !terms.privacy) {
+  if (!terms.ageOver14 || !terms.service || !terms.privacy) {
     throw new Error('필수 약관에 동의해 주세요.');
   }
 
@@ -228,6 +229,7 @@ export async function saveUserTermsAgreement(
   const { error } = await supabase.from('user_terms_agreements').upsert(
     {
       user_id: userId,
+      age_over_14_confirmed: terms.ageOver14,
       service_terms_agreed: terms.service,
       privacy_policy_agreed: terms.privacy,
       marketing_agreed: terms.marketing,
